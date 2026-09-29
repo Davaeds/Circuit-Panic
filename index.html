@@ -1,10 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
 <title>Circuit Panic!</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Circuit Panic! A nervous little wiring picture. © 2026 Ethan Davis. All rights reserved.">
+<meta name="theme-color" content="#0d0806">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Circuit Panic!">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rye&family=Special+Elite&display=swap">
 <link rel="stylesheet" href="style.css">
-
+</head>
+<body>
 <div id="app">
   <div id="frame">
     <svg id="stage" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A home electrician's workbench at night. A live wire has burst out of the wall and lurks over the bench, now and then creeping up to poke one of the nervous parts: a light bulb, an outlet, a multimeter and an access control board reading a book. A fuse and a light switch sometimes try to sneak across the back of the bench."></svg>
@@ -26,9 +41,10 @@
       </div>
       <div class="tools" role="toolbar" aria-label="Wiring tools">
         <span class="tool-label">Wire</span>
-        <button class="swatch" type="button" data-color="#1c1c1e" aria-pressed="true" aria-label="Black wire" style="--c:#2c2c31"></button>
-        <button class="swatch" type="button" data-color="#f1ead8" aria-pressed="false" aria-label="White wire" style="--c:#f1ead8"></button>
-        <button class="swatch" type="button" data-color="#c7322b" aria-pressed="false" aria-label="Red wire" style="--c:#c7322b"></button>
+        <button class="swatch" type="button" data-color="#1c1c1e" aria-pressed="true" aria-label="Black wire (hot)" style="--c:#2c2c31"></button>
+        <button class="swatch" type="button" data-color="#f1ead8" aria-pressed="false" aria-label="White wire (neutral)" style="--c:#f1ead8"></button>
+        <button class="swatch" type="button" data-color="#c7322b" aria-pressed="false" aria-label="Red wire (switched hot or traveler)" style="--c:#c7322b"></button>
+        <button class="swatch" type="button" data-color="#3f8a4c" aria-pressed="false" aria-label="Green wire (ground)" style="--c:#3f8a4c"></button>
         <button class="hud-btn tester" id="btnTester" type="button" aria-pressed="false" title="Neon voltage tester (T)">Tester</button>
         <span class="tool-gap"></span>
         <button class="hud-btn" id="btnHint" type="button">Hint</button>
@@ -58,8 +74,8 @@
         <div class="punch-head"><span>Journeyman's Card</span><span id="punchScore"></span></div>
         <ul>
           <li data-k="noShort"><span class="hole"></span>No dead shorts</li>
-          <li data-k="colors"><span class="hole"></span>Right colours: white neutral, hot never white</li>
-          <li data-k="fewest"><span class="hole"></span>No spare wire (three will do)</li>
+          <li data-k="colors"><span class="hole"></span>Right colours: white neutral, green ground, hot never white or green</li>
+          <li data-k="fewest"><span class="hole"></span>No spare wire (four will do)</li>
           <li data-k="noHints"><span class="hole"></span>No hints</li>
         </ul>
       </div>
@@ -73,14 +89,17 @@
       <h2 id="howTitle">How to Wire</h2>
       <ul class="rules">
         <li><b>Kill the power first.</b> In this game, wires can't be touched while the breaker is on.</li>
-        <li><b>Black is hot, white is neutral.</b> Red usually carries travelers between 3-way switches.</li>
+        <li><b>Black is hot, white is neutral, green (or bare) is ground.</b> Red usually carries a switched hot or the travelers between 3-way switches.</li>
         <li><b>Hot goes to brass, neutral goes to silver.</b> The silver screw feeds the socket shell, the part your fingers touch.</li>
         <li><b>A switch breaks the hot, never the neutral.</b> Otherwise the socket stays live even when the light is off.</li>
+        <li><b>Ground the metal.</b> The green wire runs from the panel's ground bar to the green screw on the box. It carries no current unless something goes wrong, and then it trips the breaker.</li>
+        <li><b>Neutral and ground meet only in the panel.</b> Joining them anywhere else puts normal current on the ground.</li>
         <li><b>On a 3-way, the dark screw is COMMON.</b> The two brass screws are TRAVELERS.</li>
-        <li><b>Never let hot touch neutral directly.</b> With nothing in between, that's a dead short: a bang, a flash and a tripped breaker.</li>
+        <li><b>Never let hot touch neutral or ground directly.</b> With nothing in between, that's a short: fault current, an arc, and a tripped breaker.</li>
       </ul>
-      <p class="small">In a puzzle: drag from one screw to another to run a wire (or click one screw, then another), then hook it clockwise. Two wires on one screw get pigtailed with a wire nut. Click a wire to cut it. B flips the breaker, S flips the switch, T picks up the neon tester.</p>
+      <p class="small">In a puzzle: drag from one screw to another to run a wire (or tap one screw, then another), then wrap it round the screw clockwise with the brass grip. Two wires on one screw get pigtailed with a wire nut. Tap a wire to cut it. B flips the breaker, S flips the switch, T picks up the neon tester.</p>
       <p class="small">This game simplifies things for learning. Your instructor and the NEC have the final word.</p>
+      <p class="small copy">© 2026 Ethan Davis. All rights reserved.</p>
       <button type="button" class="card-btn" data-close>Got it</button>
     </section>
 
@@ -113,3 +132,5 @@
 <script src="js/menu.js"></script>
 <script src="js/level.js"></script>
 <script>App.start('menu');</script>
+</body>
+</html>
