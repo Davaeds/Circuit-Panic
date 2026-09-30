@@ -62,14 +62,24 @@
     },
     async go(name, opts = {}) {
       if (this.busy) return;
+      /* "Start Wiring" opens the job picker: Chapter 1, in order */
+      if (name === 'level' && this.current === 'menu' && !opts.picked && window.CircuitLevels) {
+        pickFrom = opts.from || null;
+        window.CircuitLevels.refresh();
+        this.showCard('levelCard', () => { const b = document.querySelector('#menu .menu-item.sel'); if (b) b.focus(); });
+        return;
+      }
       this.busy = true;
       const [cx, cy] = opts.from || [640, 360];
       A.sfx.slide(false);
       await Iris.run('closed', 0.7, cx / 1280, cy / 720);
       if (this.current) this.screens[this.current].exit();
+      if (window.GFX) window.GFX.clear();
       this.current = name;
       this.screens[name].enter(opts);
-      await new Promise(r => setTimeout(r, 250));
+      /* a job gets its title card on an old-film leader while the iris is shut */
+      const tc = this.screens[name].title;
+      if (tc) await titleCard(tc); else await new Promise(r => setTimeout(r, 250));
       A.sfx.slide(true);
       await Iris.run('open', 0.8, 0.5, 0.5);
       this.busy = false;
@@ -78,38 +88,80 @@
     wait: s => new Promise(r => setTimeout(r, s * 1000)),
   };
   window.App = App;
+  async function titleCard(tc) {
+    const c = document.getElementById('jobCard');
+    if (!c) return App.wait(0.25);
+    c.querySelector('.jc-num').textContent = tc.num;
+    c.querySelector('.jc-name').textContent = tc.name;
+    c.classList.remove('in', 'out'); c.hidden = false;
+    void c.offsetWidth;
+    c.classList.add('in');
+    A.sfx.tick();
+    await App.wait(1.3);
+    c.classList.add('out');
+    await App.wait(0.2);
+    c.hidden = true; c.classList.remove('in', 'out');
+  }
 
   /* ---------- cards (paper sheets over the scene) ---------- */
   let openCard = null, cardReturn = null;
+  /* a card can bring its own entrance and exit (the job sign drops in on its
+     chains and gets yanked back up): App.cardFx[id] = { show(card), hide(card) },
+     and hide() must set card.hidden itself when it's done */
+  App.cardFx = {};
   App.showCard = function (id, onClose) {
     if (openCard) openCard.hidden = true;
     openCard = document.getElementById(id);
     openCard.hidden = false;
     cardReturn = onClose || null;
-    const btn = openCard.querySelector('button, input');
-    if (btn) btn.focus();
+    const fx = App.cardFx[id];
+    if (fx && fx.show) fx.show(openCard);
+    const btn = openCard.querySelector('button:not(:disabled), input');
+    if (btn) btn.focus({ preventScroll: true });
   };
   App.closeCard = function () {
     if (!openCard) return;
-    openCard.hidden = true; openCard = null;
-    A.sfx.tick();
+    const card = openCard, fx = App.cardFx[card.id];
+    openCard = null;
+    if (fx && fx.hide) fx.hide(card); else { card.hidden = true; A.sfx.tick(); }
     const cb = cardReturn; cardReturn = null;
     if (cb) cb();
   };
   Object.defineProperty(App, 'cardOpen', { get: () => !!openCard });
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => App.closeCard()));
+  /* the job picker: each button goes straight to its level through the iris */
+  let pickFrom = null;
+  document.querySelectorAll('#levelCard [data-level]').forEach(b => b.addEventListener('click', () => {
+    if (b.disabled) return;
+    A.sfx.select();
+    const from = pickFrom;
+    cardReturn = null;
+    App.closeCard();
+    App.go(b.dataset.level, { from: from || [640, 360], picked: true });
+  }));
 
   /* ---------- settings ---------- */
   const ui = {
     music: document.getElementById('musicVol'), sfx: document.getElementById('sfxVol'),
     scares: document.getElementById('scares'), film: document.getElementById('filmFx'),
-    musicBtn: document.getElementById('musicToggle'),
+    musicBtn: document.getElementById('musicToggle'), fxq: document.getElementById('fxQ'),
   };
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const saved = (() => { try { return JSON.parse(localStorage.getItem('circuitPanic.settings') || 'null'); } catch (e) { return null; } })();
-  const prefs = Object.assign({ music: 55, sfx: 80, scares: true, film: !reduce, musicOn: true }, saved || {});
+  const prefs = Object.assign({ music: 55, sfx: 80, scares: true, film: !reduce, musicOn: true, fx: 'auto' }, saved || {});
   App.prefs = prefs;
   App.boil = prefs.film;
+  /* the GPU light pass (js/gfx.js): High / Low / Off, Auto picks for the device */
+  const G = window.GFX;
+  if (G) G.init(frame, prefs.fx, prefs.film);
+  function showFxq() {
+    if (!ui.fxq) return;
+    ui.fxq.value = prefs.fx;
+    const auto = ui.fxq.querySelector('option[value="auto"]');
+    if (auto) auto.textContent = !G || !G.ok ? 'Auto (Off: no WebGL)' : `Auto (${G.q === 'high' ? 'High' : 'Low'})`;
+    if (!G || !G.ok) ui.fxq.querySelectorAll('option[value="high"], option[value="low"]').forEach(o => { o.disabled = true; });
+  }
+  if (G) G.onAuto = showFxq;
   function applyPrefs() {
     A.settings.music = prefs.musicOn ? prefs.music / 100 : 0;
     A.settings.sfx = prefs.sfx / 100;
@@ -117,6 +169,8 @@
     A.apply();
     Film.enabled = prefs.film;
     App.boil = prefs.film;
+    if (G) { G.film = prefs.film; if (G.want !== prefs.fx) G.setQuality(prefs.fx); }
+    showFxq();
     ui.musicBtn.textContent = prefs.musicOn ? 'Music: on' : 'Music: off';
     ui.musicBtn.setAttribute('aria-pressed', String(prefs.musicOn));
     try { localStorage.setItem('circuitPanic.settings', JSON.stringify(prefs)); } catch (e) { /* storage unavailable */ }
@@ -128,6 +182,7 @@
   ui.sfx.addEventListener('change', () => A.sfx.squeak());
   ui.scares.addEventListener('change', () => { prefs.scares = ui.scares.checked; applyPrefs(); if (prefs.scares) A.sfx.laugh(false); });
   ui.film.addEventListener('change', () => { prefs.film = ui.film.checked; applyPrefs(); });
+  if (ui.fxq) ui.fxq.addEventListener('change', () => { prefs.fx = ui.fxq.value; applyPrefs(); A.sfx.tick(); });
   ui.musicBtn.addEventListener('click', () => { prefs.musicOn = !prefs.musicOn; applyPrefs(); });
   applyPrefs();
 
@@ -147,6 +202,7 @@
     introStarted = true;
     A.init();
     applyPrefs();
+    A.sfx.projector(4.8);
     intro.classList.add('counting');
     /* a real film leader: each number holds for a full second while the sweep
        hand goes round once, with a blip as the number changes */
@@ -188,6 +244,7 @@
     if (!App.paused) {
       const t = now / 1000;
       if (App.current) App.screens[App.current].update(t, dt);
+      if (G) G.render(t);
       Film.frame(t);
     }
     requestAnimationFrame(loop);

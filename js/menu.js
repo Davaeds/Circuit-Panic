@@ -124,6 +124,9 @@
   el('rect', { x: -14, y: 0, width: 28, height: 42, rx: 5, fill: '#e9dcc0', stroke: INK, 'stroke-width': 3 }, plate);
   el('path', { d: 'M-5,12 v6 M5,12 v8 M-5,28 v6 M5,28 v8', stroke: INK, 'stroke-width': 2.4 }, plate);
   el('circle', { cx: 0, cy: 3, r: 2.4, fill: 'url(#gSteel)', stroke: INK, 'stroke-width': 1 }, plate);
+  /* the whole back wall is painted on watercolour paper (GPU quality only) */
+  const G = window.GFX;
+  if (G) G.paper(L.props, 0, 0, 1280, 480);
 
   /* hanging shop lamps */
   const lamps = LAMPX.map((x, i) => {
@@ -186,6 +189,7 @@
     el('path', { d: `M${x0 + 8},618 H${x1 - 8}`, stroke: '#8a5a34', 'stroke-width': 2.5, opacity: 0.6 }, L.bench);
     el('rect', { x: (x0 + x1) / 2 - 26, y: 642, width: 52, height: 12, rx: 6, fill: 'url(#gBrass)', stroke: INK, 'stroke-width': 3 }, L.bench);
   }
+  if (G) G.paper(L.bench, 0, 468, 1280, 252, { flip: true, opacity: 0.85 });
   /* small props live at the front edge of the bench, clear of the back lane the
      fuse and switch walk along */
   const PROPS = [];
@@ -204,8 +208,9 @@
   const flash = el('rect', { x: 0, y: 0, width: 1280, height: 720, fill: '#fff4c8', opacity: 0, 'pointer-events': 'none' }, L.flash);
 
   /* ---------- cast ---------- */
-  const scene = { defs: App.defs, layer: L.cast, get boil() { return App.boil; } };
-  const villainScene = { defs: App.defs, layer: L.villain, get boil() { return App.boil; } };
+  /* (lamps and dark tell the rig where the rim light comes from, and when it's out) */
+  const scene = { defs: App.defs, layer: L.cast, get boil() { return App.boil; }, lamps: LAMPX, get dark() { return now > ev.black0 && now < ev.black1; } };
+  const villainScene = { defs: App.defs, layer: L.villain, get boil() { return App.boil; }, lamps: LAMPX, get dark() { return now > ev.black0 && now < ev.black1; } };
   /* the two walkers are built first so the front row is drawn over them: they use
      the back lane of the bench, further from the camera */
   const LANE = 490;
@@ -601,12 +606,18 @@
            rocked back while the legs spin on the spot), eyes like saucers */
         const [s0, s1] = c.cfg.shoulders, top = c === sw ? -222 : -168;
         const scramble = now < w.runT;
-        const f = t * (scramble ? 26 : 19), R0 = c === sw ? 34 : 28;
-        tg.lhx = -24 + R0 * Math.cos(f); tg.lhy = top - s0[1] - 14 + R0 * 0.9 * Math.sin(f);
-        tg.rhx = 24 + R0 * Math.cos(f + Math.PI); tg.rhy = top - s1[1] - 14 + R0 * 0.9 * Math.sin(f + Math.PI);
-        tg.lbend = 0.45; tg.rbend = 0.45;
+        /* each one flails to its own ragged rhythm: the tempo lurches, the circles
+           swell and pinch, arms get flung high overhead and whip back down */
+        const o = w.off ? 1.7 : 0, sp = (scramble ? 26 : 19) * (w.off ? 1.13 : 1);
+        const f = t * sp + 0.9 * Math.sin(t * 5.3 + o), g = t * sp * 0.87 + 1.1 * Math.sin(t * 4.1 + o * 2);
+        const R0 = (c === sw ? 40 : 33) * (1 + 0.35 * Math.sin(t * 7.7 + o));
+        const R1 = (c === sw ? 40 : 33) * (1 + 0.35 * Math.sin(t * 6.3 + o + 2));
+        const flingL = Math.max(0, Math.sin(t * 3.7 + o)) ** 3 * 26, flingR = Math.max(0, Math.sin(t * 3.1 + o + 2.4)) ** 3 * 26;
+        tg.lhx = -26 - flingL * 0.4 + R0 * 1.15 * Math.cos(f); tg.lhy = top - s0[1] - 18 - flingL + R0 * Math.sin(f);
+        tg.rhx = 26 + flingR * 0.4 + R1 * 1.15 * Math.cos(-g + Math.PI); tg.rhy = top - s1[1] - 18 - flingR + R1 * Math.sin(-g + Math.PI);
+        tg.lbend = 0.45 + 0.35 * Math.sin(f * 2); tg.rbend = 0.45 + 0.35 * Math.sin(g * 2 + 1);
         d.lg = 'palm'; d.rg = 'palm'; d.lLayer = d.rLayer = 'front';
-        tg.lroll = 0.9 * Math.sin(f * 1.5); tg.rroll = -0.9 * Math.sin(f * 1.5 + 1);
+        tg.lroll = 1.1 * Math.sin(f * 1.5); tg.rroll = -1.1 * Math.sin(g * 1.5 + 1);
         tg.lean += scramble ? -dir * 22 : dir * 12;
         tg.sy += 0.08 * Math.sin(t * 40); tg.hipY -= scramble ? 8 : 4;
         tg.sweat = 1; d.mouth = 'gasp'; tg.mouthOpen = 1.1; tg.pupil = 0.3; tg.browRaise = 1.6; tg.lid = 0; tg.shake += 1.2; tg.pop = 1;
@@ -894,6 +905,78 @@
     else if (e.key === 'ArrowUp' || e.key === 'w') { e.preventDefault(); focusItem(sel - 1); items[sel].focus(); }
   });
 
+  /* ---------- the job sign ----------
+     "Start Wiring" lowers an old painted plank sign into the scene on two
+     chains: it drops, the chains snap taut with a clink, it bounces and swings
+     to rest. Picking a job plays the iris onto the bulb (unchanged); backing
+     out yanks the sign back up into the dark. */
+  const sign = document.getElementById('levelCard');
+  if (sign) {
+    const still = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const S = { y: 0, vy: 0, th: 0, w: 0, mode: 'off', raf: 0, last: 0, bounces: 0 };
+    const frameH = () => App.frame.getBoundingClientRect().height || 720;
+    const apply = () => { sign.style.transform = `translate(-50%, ${S.y.toFixed(1)}px) rotate(${S.th.toFixed(4)}rad)`; };
+    const step = ts => {
+      const dt = Math.min(0.033, Math.max(0.001, (ts - S.last) / 1000)); S.last = ts;
+      const H = frameH(), g = H * 5.2;
+      if (S.mode === 'drop') {
+        S.vy += g * dt; S.y += S.vy * dt;
+        if (S.y >= 0) {
+          /* the chains snap tight: a clink, and the sign bounces back up a little */
+          if (S.vy > H * 0.25) {
+            A.sfx.clink(Math.min(1, S.vy / (H * 2.4)));
+            if (!S.bounces) { S.w += (Math.random() < 0.5 ? -1 : 1) * 0.35; A.sfx.thud(); }
+            S.bounces++;
+            S.vy = -S.vy * 0.32;
+          } else S.vy = 0;
+          S.y = 0;
+        }
+      } else if (S.mode === 'yank') {
+        S.vy -= g * 1.7 * dt; S.y += S.vy * dt;
+        if (S.y < -(sign.offsetTop + sign.offsetHeight + 60)) { S.mode = 'off'; sign.hidden = true; sign.style.transform = ''; }
+      }
+      /* it swings from the ceiling, heavy and damped */
+      const L = Math.max(60, sign.offsetTop + sign.offsetHeight * 0.5);
+      S.w += (-(g / L) * 0.6 * Math.sin(S.th) - 1.4 * S.w) * dt; S.th += S.w * dt;
+      apply();
+      const settled = S.mode === 'drop' && S.y === 0 && S.vy === 0 && Math.abs(S.w) < 0.002 && Math.abs(S.th) < 0.0015;
+      if (settled) { S.th = 0; apply(); }
+      S.raf = S.mode !== 'off' && !settled ? requestAnimationFrame(step) : 0;
+    };
+    const run = () => { if (!S.raf) { S.last = performance.now(); S.raf = requestAnimationFrame(step); } };
+    App.cardFx.levelCard = {
+      show() {
+        sign.style.transformOrigin = `50% ${-sign.offsetTop}px`;
+        if (still) { S.mode = 'off'; sign.style.transform = 'translate(-50%, 0)'; return; }
+        S.mode = 'drop'; S.y = -(sign.offsetTop + sign.offsetHeight + 30); S.vy = 0; S.th = (Math.random() - 0.5) * 0.05; S.w = 0; S.bounces = 0;
+        apply(); A.sfx.slide(false); run();
+      },
+      hide() {
+        if (still) { sign.hidden = true; return; }
+        S.mode = 'yank'; S.vy = -frameH() * 0.5; S.w += (Math.random() < 0.5 ? -1 : 1) * 0.3;
+        A.sfx.clink(0.7); A.sfx.whoosh(); run();
+      },
+    };
+    /* arrow keys walk the list (Enter picks, Escape backs out) */
+    sign.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      const bs = [...sign.querySelectorAll('button:not(:disabled)')];
+      const i = bs.indexOf(document.activeElement);
+      e.preventDefault(); e.stopPropagation();
+      bs[(i + (e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length].focus();
+      A.sfx.hover();
+    });
+  }
+
+  /* the HTML menu buttons sit on the painted sign, so they take the camera too */
+  const REDUCE_M = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function navDrift(z, x, y) {
+    if (z === 1 && !x && !y) { if (nav.style.transform) nav.style.transform = ''; return; }
+    const s = App.frame.clientWidth / 1280;
+    nav.style.transformOrigin = `${R(640 * s - nav.offsetLeft)}px ${R(360 * s - nav.offsetTop)}px`;
+    nav.style.transform = `translate(${R(x * s)}px,${R(y * s)}px) scale(${Math.round(z * 10000) / 10000})`;
+  }
+
   /* ---------- screen lifecycle ---------- */
   let lastFrame = -1;
   const idleT = { next: 0 };
@@ -940,6 +1023,17 @@
       const black = t > ev.black0 && t < ev.black1;
       const stutter = black && Math.random() < 0.1;
       nav.classList.toggle('dark', black && !stutter);
+      /* with the GPU pass on, the room's light is real light (js/gfx.js) and the
+         painted-on pools and glows step aside */
+      const gl = !!(G && G.on);
+      /* the camera drifts, slow as breathing; the sign's buttons ride along */
+      const drift = gl && !REDUCE_M;
+      /* (never less zoom than the pan needs, so no edge of the room ever shows) */
+      const cz = drift ? 1.02 + 0.006 * Math.sin(t * 0.21) : 1, cx = drift ? 7 * Math.sin(t * 0.13) : 0, cy = drift ? 3.5 * Math.sin(t * 0.17 + 1) : 0;
+      if (drift) root.setAttribute('transform', `translate(${R(640 + cx)},${R(360 + cy)}) scale(${Math.round(cz * 10000) / 10000}) translate(-640,-360)`);
+      else if (root.hasAttribute('transform')) root.removeAttribute('transform');
+      navDrift(cz, cx, cy);
+      if (gl) { G.clear(); G.view(cz, 640 * (1 - cz) + cx, 360 * (1 - cz) + cy); G.ambient(black ? [0.15, 0.15, 0.2] : [0.72, 0.68, 0.64]); }
       lamps.forEach((l, i) => {
         const acc = -9.8 / 2.2 * Math.sin(l.th) - 0.8 * l.w + 0.25 * Math.sin(t * 0.6 + l.phase);
         l.w += acc / 24; l.th += l.w / 24;
@@ -948,16 +1042,42 @@
         const on = black && !stutter ? 0 : 1;
         l.cone.setAttribute('opacity', on);
         l.bulbE.setAttribute('fill', on ? '#fff4c8' : '#5a4a30');
-        pools[i].setAttribute('opacity', on);
-        benchPools[i].setAttribute('opacity', on);
+        pools[i].setAttribute('opacity', gl ? 0 : on);
+        benchPools[i].setAttribute('opacity', gl ? 0 : on);
         benchPools[i].setAttribute('cx', R(l.x + Math.sin(l.th) * 460));
+        if (gl && on) {
+          /* the shade throws a spot down its own axis, so the pool swings with it:
+             a cone from a point just behind the shade, the hot spot where it meets
+             the bench, and bloom round the bulb itself */
+          const sn = Math.sin(l.th), cs = Math.cos(l.th), dir = [-sn, cs];
+          G.cone(l.x + sn * 64, 60 - cs * 64, 900, [0.5, 0.42, 0.3], dir, 0.95, 0.83);
+          G.light(l.x - sn * (462 / cs), 528, 270, 62, [0.3, 0.25, 0.17]);
+          G.glow(l.x - sn * 38, 60 + cs * 38, 64, [1, 0.93, 0.75], 1.5);
+        }
       });
-      darkRect.setAttribute('opacity', black ? (stutter ? 0.55 : 0.97) : 0);
+      darkRect.setAttribute('opacity', black ? (stutter ? 0.55 : gl ? 0.9 : 0.97) : 0);
       const [blx, bly] = bulb.world(0, -150);
       const lit = black ? clamp(bulb.p.glow) : 0;
-      sa(bulbLight, { cx: R(blx), cy: R(bly + 40), opacity: R(clamp(bulb.p.glow - 0.15) * 70) / 100 });
-      sa(darkBulb, { cx: R(blx), cy: R(bly), opacity: R(lit * 85) / 100 });
+      sa(bulbLight, { cx: R(blx), cy: R(bly + 40), opacity: gl ? 0 : R(clamp(bulb.p.glow - 0.15) * 70) / 100 });
+      sa(darkBulb, { cx: R(blx), cy: R(bly), opacity: gl ? 0 : R(lit * 85) / 100 });
       bulbLit.setAttribute('opacity', R(lit * 100) / 100);
+      if (gl) {
+        /* a lit bulb really lights the room round it, with bloom at the glass */
+        const bg = clamp(bulb.p.glow - 0.1, 0, 1.4);
+        G.light(blx, bly + 30, 430, 360, [0.62 * bg, 0.5 * bg, 0.3 * bg]);
+        G.glow(blx, bly, 130, [1, 0.9, 0.62], 1.7 * bg);
+        /* moonlight through the window, the title's red neon, the sign's chase
+           lights and the radio dial */
+        G.light(185, 200, 380, 320, black ? [0.2, 0.25, 0.44] : [0.1, 0.12, 0.22]);
+        if (!black) {
+          const neon = t < ev.panicOff && f % 2 === 0 ? 0.15 : 1;
+          G.light(640, 142, 330, 120, [0.42 * neon, 0.09 * neon, 0.05 * neon]);
+          G.light(640, 300, 220, 130, [0.16, 0.13, 0.08]);
+          G.glow(132, 376, 34, [1, 0.72, 0.3], 0.7);
+        }
+        /* soft contact shadows under everybody standing on the bench */
+        for (const c of [bulb, outlet, meter, board, fuse, sw]) if (!c.root.style.display) G.shadowOf(c, 0.42, c.cfg.x < 640 ? LAMPX[0] : LAMPX[1]);
+      }
       for (const de of darkEyes) {
         const c = de.c, F = c.cfg.face;
         if (!black || (c === bulb && lit > 0.5) || !onStage(c)) { de.g.setAttribute('opacity', 0); continue; }
@@ -972,6 +1092,13 @@
           sa(de.e[i].w, { cx: R(ex + jit), cy: R(ey), rx: R(rx), ry: R(ry) });
           sa(de.e[i].p, { cx: R(ex + jit + clamp(c.p.lookX, -1, 1) * rx * 0.4), cy: R(ey + clamp(c.p.lookY, -1, 1) * ry * 0.35), rx: R(rx * (c === wire ? 0.2 : 0.32)), ry: R(ry * (c === wire ? 0.18 : 0.36)) });
         });
+        /* in the dark the eyes glow: the Phantom's pinpricks burn yellow, the
+           others' whites just catch enough light to show a little face */
+        if (gl && !stutter) {
+          const [mx, my] = c.world(F.x + turn * F.turnShift, F.y + c.p.faceY), sc = c.cfg.scale;
+          if (c === wire) G.glow(mx, my, F.spacing * sc * 3.2, [1, 0.78, 0.3], 2.6);
+          else G.glow(mx, my, F.spacing * sc * 3.4, [0.95, 0.92, 0.82], 1.05);
+        }
       }
       const [wx, wy] = wire.world(0, -104);
       stars.forEach((s, i) => {

@@ -9,6 +9,8 @@
   class Particles {
     constructor(layer) { this.layer = layer; this.list = []; }
     spark(x, y, n = 10, power = 1) {
+      /* real light: a spray of sparks flashes orange onto whatever is near */
+      if (window.GFX && GFX.on) GFX.flashAt(this.layer, x, y, { r: 140 + 90 * power, c: [1, 0.7, 0.3], k: Math.min(1.4, 0.35 + n * 0.05) * power, life: 0.3 });
       for (let i = 0; i < n; i++) {
         const e = el('path', { d: star(rand(5, 10)), fill: '#fff6b8', stroke: '#ff9b1a', 'stroke-width': 2 }, this.layer);
         const a = rand(-Math.PI, 0.3), sp = rand(150, 420) * power;
@@ -22,6 +24,8 @@
         d += ` L${R(x1 + (x2 - x1) * k + rand(-16, 16))},${R(y1 + (y2 - y1) * k + rand(-16, 16))}`;
       }
       d += ` L${R(x2)},${R(y2)}`;
+      /* an arc throws hard blue-white light, flickering, for a blink */
+      if (window.GFX && GFX.on) GFX.flashAt(this.layer, (x1 + x2) / 2, (y1 + y2) / 2, { r: Math.max(170, Math.hypot(x2 - x1, y2 - y1) * 0.9), c: [0.8, 0.88, 1], k: 1.25, life: 0.16, flicker: true });
       const g = el('g', {}, this.layer);
       el('path', { d, fill: 'none', stroke: '#ffd23a', 'stroke-width': 12, opacity: 0.45, 'stroke-linejoin': 'round', filter: 'url(#softBlur)' }, g);
       el('path', { d, fill: 'none', stroke: '#fffbe6', 'stroke-width': 3.5, 'stroke-linejoin': 'round' }, g);
@@ -34,12 +38,22 @@
         this.list.push({ e, kind: 'smoke', x: x + rand(-8, 8) * s, y: y + rand(-6, 6) * s, vx: (rand(-18, 18) + drift) * s, vy: rand(-70, -35) * s, life: rand(0.9, 1.5), t: 0, r0: rand(0.45, 0.65) * s, r1: rand(1.2, 1.7) * s, rot: rand(-20, 20) });
       }
     }
-    shards(x, y, n = 14) {
+    /* glass shards; given a floor, they fall to it, bounce, skid and lie there
+       a moment, each landing with a tiny impact star */
+    shards(x, y, n = 14, floor = null) {
       for (let i = 0; i < n; i++) {
         const s = rand(6, 14);
         const e = el('path', { d: `M0,${-s} L${s * 0.7},${s * 0.5} L${-s * 0.6},${s * 0.4} Z`, fill: '#f4f1e6', stroke: INK, 'stroke-width': 2.2, 'stroke-linejoin': 'round' }, this.layer);
         const a = rand(-Math.PI, 0), sp = rand(220, 520);
-        this.list.push({ e, kind: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 1100, life: rand(0.8, 1.3), t: 0, r: rand(0, 360), vr: rand(-900, 900) });
+        this.list.push({ e, kind: floor == null ? 'spark' : 'shard', floor, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 1100, life: floor == null ? rand(0.8, 1.3) : rand(2.2, 3), t: 0, r: rand(0, 360), vr: rand(-900, 900), hits: 0 });
+      }
+    }
+    /* plaster crumbs knocked off a hole's edge: little chunks that drop and bounce */
+    crumbs(x, y, n = 6, floor = 594) {
+      for (let i = 0; i < n; i++) {
+        const s = rand(2.5, 5);
+        const e = el('path', { d: `M${-s},0 L${-s * 0.2},${-s} L${s},${-s * 0.3} L${s * 0.5},${s * 0.7} Z`, fill: '#c9b28c', stroke: '#3a2414', 'stroke-width': 1.4, 'stroke-linejoin': 'round' }, this.layer);
+        this.list.push({ e, kind: 'shard', floor, x: x + rand(-14, 14), y, vx: rand(-60, 60), vy: rand(-80, 20), g: 1200, life: rand(1.2, 1.8), t: 0, r: rand(0, 360), vr: rand(-400, 400), hits: 1 });
       }
     }
     confetti(x, y, n = 40) {
@@ -62,13 +76,25 @@
     }
     clear() { this.list.forEach(p => p.e.remove()); this.list = []; }
     update(dt) {
-      this.list = this.list.filter(p => {
+      /* particles spawned while updating (a shard's landing star) join next frame */
+      const cur = this.list;
+      this.list = [];
+      const born = this.list;
+      this.list = cur.filter(p => {
         p.t += dt;
         const u = p.t / p.life;
         if (u >= 1) { p.e.remove(); return false; }
         if (p.kind === 'spark') {
           p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += p.vr * dt;
           sa(p.e, { transform: `translate(${R(p.x)},${R(p.y)}) rotate(${R(p.r)}) scale(${R((1 - u) * 100) / 100})` });
+        } else if (p.kind === 'shard') {
+          p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.r += p.vr * dt;
+          if (p.y > p.floor) {
+            p.y = p.floor;
+            if (p.vy > 90) { if (!p.hits++) this.bonk(p.x, p.floor - 3, 0.3); p.vy *= -0.3; p.vx *= 0.55; p.vr *= 0.4; }
+            else { p.vy = 0; p.vx *= 0.8; p.vr *= 0.7; }
+          }
+          sa(p.e, { transform: `translate(${R(p.x)},${R(p.y)}) rotate(${R(p.r)}) scale(${R(Math.min(1, (1 - u) * 4) * 100) / 100})` });
         } else if (p.kind === 'smoke') {
           p.x += p.vx * dt; p.y += p.vy * dt;
           sa(p.e, { transform: `translate(${R(p.x)},${R(p.y)}) rotate(${R(p.rot + u * 30)}) scale(${R((p.r0 + (p.r1 - p.r0) * u) * 100) / 100})`, opacity: R((1 - u * u) * 90) / 100 });
@@ -79,7 +105,7 @@
           p.e.setAttribute('opacity', Math.random() < 0.5 ? 1 : 0.4);
         }
         return true;
-      });
+      }).concat(born);
     }
   }
 
@@ -113,7 +139,8 @@
       const x = this.x;
       x.clearRect(0, 0, 480, 270);
       if (!this.enabled) { this.fl.style.opacity = 0; return; }
-      x.drawImage(this.tex[f % 4], -rand(0, 20), -rand(0, 12), 520, 292);
+      /* on High the GPU pass draws the grain; the specks, hairs and scratches stay here */
+      if (this.grain !== false) x.drawImage(this.tex[f % 4], -rand(0, 20), -rand(0, 12), 520, 292);
       const specks = Math.random() < 0.1 ? 1 : 0;
       for (let i = 0; i < specks; i++) {
         x.fillStyle = Math.random() < 0.7 ? 'rgba(18,10,6,.75)' : 'rgba(255,245,220,.6)';

@@ -211,6 +211,12 @@
       if (!ctx) return; const t = now();
       for (let i = 0; i < 6; i++) noise(t + i * 0.07, 0.02, { type: 'bandpass', freq: 1800, q: 4, vol: 0.2, bus: sfxBus });
     },
+    /* chain links knocking together as a hanging sign jerks tight: bright tinks */
+    clink(k = 1) {
+      if (!ctx) return; const t = now();
+      for (let i = 0; i < 3; i++) tone(2300 + Math.random() * 1100, t + i * 0.035 + Math.random() * 0.015, 0.1, { type: 'triangle', vol: 0.075 * k, bus: sfxBus, cutoff: 7000 });
+      noise(t, 0.03, { type: 'bandpass', freq: 5200, q: 6, vol: 0.14 * k, bus: sfxBus });
+    },
     click() { if (!ctx) return; noise(now(), 0.02, { type: 'bandpass', freq: 2500, q: 2, vol: 0.35, bus: sfxBus }); tone(160, now(), 0.05, { type: 'square', vol: 0.08, bus: sfxBus, cutoff: 900 }); },
     pop() { if (!ctx) return; tone(700, now(), 0.09, { type: 'sine', vol: 0.3, bus: sfxBus, glide: 180 }); },
     /* a sneaking footstep: a tiny pizzicato pluck */
@@ -250,6 +256,20 @@
       tone(380, t, 0.02, { type: 'square', vol: 0.045, bus: sfxBus, cutoff: 1500 });
     },
     snip() { if (!ctx) return; noise(now(), 0.06, { freq: 5000, vol: 0.25, bus: sfxBus }); noise(now() + 0.05, 0.04, { freq: 7000, vol: 0.2, bus: sfxBus }); },
+    /* an old projector running up: a motor whir, a band of fan noise, and the
+       film gate clattering eighteen times a second, all fading out at the end */
+    projector(dur = 4.5) {
+      if (!ctx) return;
+      const t0 = now(), hold = Math.max(0.1, dur - 0.9);
+      tone(58, t0, 0.5, { type: 'sawtooth', vol: 0.028, bus: sfxBus, attack: 0.4, sustain: hold, cutoff: 380, vib: [6, 1.2] });
+      const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      s.buffer = noiseBuf; s.loop = true;
+      f.type = 'bandpass'; f.frequency.value = 760; f.Q.value = 0.8;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.035, t0 + 0.4);
+      g.gain.setValueAtTime(0.035, t0 + dur - 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t0); s.stop(t0 + dur + 0.05);
+      for (let t = 0.2; t < dur - 0.3; t += 1 / 18) noise(t0 + t, 0.014, { type: 'bandpass', freq: 2400, q: 3, vol: 0.045 + Math.random() * 0.03, bus: sfxBus });
+    },
     hum(on) {
       if (!ctx) return;
       if (on && !X._hum) {

@@ -53,7 +53,10 @@
   <radialGradient id="gCable" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#e98a6e"/><stop offset=".5" stop-color="#b8392c"/><stop offset="1" stop-color="#7a1c14"/></radialGradient>
   <radialGradient id="gVolume" cx="34%" cy="28%" r="85%"><stop offset="0" stop-color="#fffaf0" stop-opacity=".35"/><stop offset=".45" stop-color="#fffaf0" stop-opacity="0"/><stop offset=".8" stop-color="#5a2e10" stop-opacity=".18"/><stop offset="1" stop-color="#3a1a08" stop-opacity=".42"/></radialGradient>
   <linearGradient id="gBox" x1="0" x2="1"><stop offset="0" stop-color="#6e6a63"/><stop offset=".4" stop-color="#c4bfb4"/><stop offset="1" stop-color="#5a5650"/></linearGradient>
-  ${[0, 1, 2].map(i => `<filter id="boil${i}" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="1" seed="${i * 7 + 3}"/><feDisplacementMap in="SourceGraphic" scale="1.9" xChannelSelector="R" yChannelSelector="G" result="b"/>${INKDROP}${GRADE}</filter><filter id="boilT${i}" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="1" seed="${i * 7 + 3}"/><feDisplacementMap in="SourceGraphic" scale="1.9" xChannelSelector="R" yChannelSelector="G" result="b"/>${INKDROP}</filter>`).join('')}
+  ${[0, 1, 2, 3].map(i => `<filter id="boil${i}" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="1" seed="${i * 7 + 3}"/><feDisplacementMap in="SourceGraphic" scale="1.9" xChannelSelector="R" yChannelSelector="G" result="b"/>${INKDROP}${GRADE}</filter><filter id="boilT${i}" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="1" seed="${i * 7 + 3}"/><feDisplacementMap in="SourceGraphic" scale="1.9" xChannelSelector="R" yChannelSelector="G" result="b"/>${INKDROP}</filter>`).join('')}
+  ${/* rim light (High quality): the same boiling ink, plus a warm edge on the side
+       and top facing the lamp: pixels whose neighbour toward the light is empty */
+    [0, 1, 2, 3].map(i => ['L', 'R'].map(S => `<filter id="rim${S}${i}" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="1" seed="${i * 7 + 3}"/><feDisplacementMap in="SourceGraphic" scale="1.9" xChannelSelector="R" yChannelSelector="G" result="b"/>${INKDROP}${GRADE.replace('/>', ' result="g"/>')}<feOffset in="b" dx="${S === 'R' ? -4 : 4}" dy="4" result="sh"/><feComposite in="b" in2="sh" operator="out" result="edge"/><feFlood flood-color="#ffc56a"/><feComposite in2="edge" operator="in" result="rim"/><feComposite in="g" in2="rim" operator="arithmetic" k2="1" k3="0.55"/></filter>`).join('')).join('')}
   <filter id="inkOnly" x="-8%" y="-8%" width="116%" height="116%"><feOffset in="SourceGraphic" dx="0" dy="0" result="b"/>${INKDROP}${GRADE}</filter>
   <filter id="inkProps" x="-4%" y="-4%" width="108%" height="108%"><feOffset in="SourceGraphic" dx="0" dy="0" result="b"/>${INKDROP}</filter>
   <filter id="softBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
@@ -85,24 +88,71 @@
     return [(sx + ex) / 2 + nx * bend * len, (sy + ey) / 2 + ny * bend * len];
   }
 
-  /* ---------- keyframe sampling ---------- */
+  /* ---------- keyframe sampling ----------
+     Richer in-betweens: each field runs on its own track through its keys. A key
+     where the move turns round (or the first and last) is a held pose, eased in
+     and out as before; a key the move passes THROUGH keeps its speed (a monotone
+     cubic, so it never overshoots a key), so arcs flow instead of stopping dead
+     at every drawing. Every key is still hit at exactly its time. */
+  const TRACKS = new WeakMap();
+  function tracksOf(keys) {
+    let tr = TRACKS.get(keys);
+    if (tr) return tr;
+    tr = {};
+    for (const k of keys) for (const f in k[1]) (tr[f] || (tr[f] = [])).push([k[0], k[1][f]]);
+    TRACKS.set(keys, tr);
+    return tr;
+  }
+  function slope(pts, i) {
+    if (i <= 0 || i >= pts.length - 1) return 0;
+    const [a, va] = pts[i - 1], [b, vb] = pts[i], [c, vc] = pts[i + 1];
+    if (typeof va !== 'number' || typeof vc !== 'number') return 0;
+    const d0 = (vb - va) / Math.max(b - a, 1e-4), d1 = (vc - vb) / Math.max(c - b, 1e-4);
+    if (d0 * d1 <= 0) return 0;
+    return Math.sign(d0) * Math.min(Math.abs(d0 + d1) / 2, 3 * Math.min(Math.abs(d0), Math.abs(d1)));
+  }
   function sampleKeys(keys, u) {
-    const num = {}, disc = {};
-    const fields = new Set();
-    keys.forEach(k => Object.keys(k[1]).forEach(f => fields.add(f)));
-    for (const f of fields) {
-      let prev = null, next = null;
-      for (const k of keys) {
-        if (!(f in k[1])) continue;
-        if (k[0] <= u) prev = k; else if (!next) next = k;
-      }
-      if (!prev) continue;
-      const v = prev[1][f];
+    const num = {}, disc = {}, tr = tracksOf(keys);
+    for (const f in tr) {
+      const pts = tr[f];
+      let i = -1;
+      for (let j = 0; j < pts.length; j++) if (pts[j][0] <= u) i = j;
+      if (i < 0) continue;
+      const v = pts[i][1];
       if (typeof v === 'string') { disc[f] = v; continue; }
-      if (!next) { num[f] = v; continue; }
-      num[f] = lerp(v, next[1][f], easeIO((u - prev[0]) / (next[0] - prev[0])));
+      const nx = pts[i + 1];
+      if (!nx || typeof nx[1] !== 'number' || nx[0] <= pts[i][0]) { num[f] = v; continue; }
+      const du = nx[0] - pts[i][0], s = clamp((u - pts[i][0]) / du);
+      const m1 = slope(pts, i), m2 = slope(pts, i + 1);
+      if (!m1 && !m2) { num[f] = lerp(v, nx[1], easeIO(s)); continue; }
+      const s2 = s * s, s3 = s2 * s;
+      num[f] = (2 * s3 - 3 * s2 + 1) * v + (s3 - 2 * s2 + s) * m1 * du + (3 * s2 - 2 * s3) * nx[1] + (s3 - s2) * m2 * du;
     }
     return { num, disc };
+  }
+
+  /* anticipation: a hop that comes out of nowhere gets a little crouch first, and
+     a stretch as it leaves the ground. Takes and shocks (a gasp, pop lines, a
+     jolt of glow or alarm) are never wound up: nobody sees those coming. */
+  function anticipate(keys) {
+    const j = keys.findIndex(k => typeof k[1].hipY === 'number' && k[1].hipY <= -18);
+    if (j < 0 || keys[j][0] < 0.08) return keys;
+    for (let i = 0; i <= j; i++) {
+      const o = keys[i][1];
+      if ((o.hipY > 2) || o.pop > 0.4 || o.alarm > 0.3 || o.glow > 0.5 || o.heat > 0.3 || o.mouth === 'gasp' || o.mouth === 'scream') return keys;
+    }
+    const hop = keys[j][1], dip = Math.min(10, -hop.hipY * 0.2);
+    const out = keys.map(k => [k[0], Object.assign({}, k[1])]);
+    const J = out[j][1];
+    if (J.sy == null) {
+      if (out[j + 1]) { J.sy = 1.08; J.sx = 0.94; if (out[j + 1][1].sy == null) Object.assign(out[j + 1][1], { sy: 1, sx: 1 }); }
+      else { J.sy = 1; J.sx = 1; }
+    }
+    if (J.sx == null) J.sx = 1;
+    if (J.knee == null) J.knee = 0.1;
+    out.splice(j, 0, [keys[j][0] * 0.6, { hipY: dip, sy: 0.9, sx: 1.08, knee: 0.38 }]);
+    out.sort((a, b) => a[0] - b[0]);
+    return out;
   }
 
   /* ---------- eye ---------- */
@@ -293,6 +343,10 @@
       this.boil = true;
       this.cur = { hx: 0, hy: -cfg.hipH, lean: 0, sx: 1, sy: 1 };
       this.shove = 0; this.touching = false;
+      /* the soft body: y = squash (+) / stretch (-), l = drag lean in degrees.
+         Each rig gets its own stiffness so no two jiggle in step; cfg.soft scales it */
+      this.jig = { y: 0, v: 0, l: 0, lv: 0, k: 780 + (this.phase % 1) * 340, g: cfg.soft == null ? 1 : cfg.soft };
+      this.pv = null;
 
       this.arms = [];
       if (cfg.arms !== false) {
@@ -381,7 +435,7 @@
       if (slot === 'big') this.actions = [];
       else if (this.actions.some(a => a.slot === 'big')) return false;
       else this.actions = this.actions.filter(a => a.slot !== slot);
-      this.actions.push({ keys, dur, t: 0, slot, done: opts.done, cues: (opts.cues || []).map(c => ({ u: c[0], fn: c[1], fired: false })) });
+      this.actions.push({ keys: anticipate(keys), dur, t: 0, slot, done: opts.done, cues: (opts.cues || []).map(c => ({ u: c[0], fn: c[1], fired: false })) });
       return true;
     }
     busy(slot) { return this.actions.some(a => !slot || a.slot === slot); }
@@ -433,7 +487,8 @@
         const u = clamp(a.t / a.dur);
         const w = clamp(u / 0.04) * clamp((1 - u) / 0.14);
         const k = sampleKeys(a.keys, u);
-        for (const f in k.num) tg[f] = lerp(tg[f], k.num[f], w);
+        /* keyed squash and stretch plays a quarter stronger */
+        for (const f in k.num) tg[f] = lerp(tg[f], f === 'sx' || f === 'sy' ? clamp(1 + (k.num[f] - 1) * 1.25, 0.6, 1.5) : k.num[f], w);
         if (w > 0.35) Object.assign(this.d, k.disc);
         for (const c of a.cues) if (!c.fired && u >= c.u) { c.fired = true; try { c.fn(this); } catch (e) { /* a cue must never stop the show */ } }
       }
@@ -460,6 +515,19 @@
       /* procedural drivers (walk cycles) write straight into the pose after the
          springs, so planted feet stay planted */
       if (this.drive) this.drive(this.p, t, dt);
+      /* secondary motion: the body is soft. Its own inertia squashes it as a move
+         pushes off or lands, stretches it while it's flung, and leans its top
+         behind a sideways move and on past the stop (follow-through) */
+      const vx = this.v.hipX || 0, vy = this.v.hipY || 0, J = this.jig;
+      if (this.pv && dt > 0) {
+        const ax = clamp((vx - this.pv[0]) / dt, -60000, 60000), ay = clamp((vy - this.pv[1]) / dt, -60000, 60000);
+        const n = Math.max(1, Math.ceil(dt * 120)), h = dt / n;
+        for (let s = 0; s < n; s++) {
+          J.v += (-J.k * J.y - ay * 0.0065 * J.g) * h; J.v *= Math.exp(-9 * h); J.y += J.v * h;
+          J.lv += (-J.k * 0.8 * J.l - ax * 0.32 * J.g) * h; J.lv *= Math.exp(-8 * h); J.l += J.lv * h;
+        }
+      }
+      this.pv = [vx, vy];
       const f = Math.floor(t * 24);
       if (f !== this.frame) { this.frame = f; this.render(t); }
     }
@@ -469,22 +537,38 @@
       const sh = Math.max(0, p.shake);
       const jx = (Math.random() - 0.5) * sh * 4, jr = (Math.random() - 0.5) * sh * 3;
       const hx = p.hipX + jx, hy = -c.hipH + p.hipY;
-      const lean = p.lean + jr;
+      /* the soft body (see update): squash keeps its volume, the drag leans it */
+      const jy = clamp(this.jig.y, -0.2, 0.24), jl = clamp(this.jig.l, -9, 9);
+      const lean = p.lean + jr + jl;
       const rad = (lean * Math.PI) / 180, cs = Math.cos(rad), sn = Math.sin(rad);
       /* yaw: turning toward a side narrows the front face and shows the side slab */
       const yaw = clamp(p.turn, -1, 1) * 1.05, kx = c.slab ? 0.8 + 0.2 * Math.cos(yaw) : 1;
-      const sxk = p.sx * kx;
-      const tf = (x, y) => { x *= sxk; y *= p.sy; return [hx + x * cs - y * sn, hy + x * sn + y * cs]; };
-      this.cur = { hx, hy, lean, sx: sxk, sy: p.sy };
+      const sxk = p.sx * kx * (1 + jy * 0.65), syk = p.sy * (1 - jy);
+      const tf = (x, y) => { x *= sxk; y *= syk; return [hx + x * cs - y * sn, hy + x * sn + y * cs]; };
+      this.cur = { hx, hy, lean, sx: sxk, sy: syk };
+      /* overlapping action: the hands trail a fast body move by a few frames */
+      const hdx = clamp(-(this.v.hipX || 0) * 0.03, -9, 9), hdy = clamp(-(this.v.hipY || 0) * 0.025, -9, 9);
 
       this.root.setAttribute('transform', `translate(${R(c.x)},${R(c.y)}) scale(${c.scale})`);
-      this.bodyG.setAttribute('transform', `translate(${R(hx)},${R(hy)}) rotate(${R(lean)}) scale(${R(sxk * 1000) / 1000},${R(p.sy * 1000) / 1000})`);
+      this.bodyG.setAttribute('transform', `translate(${R(hx)},${R(hy)}) rotate(${R(lean)}) scale(${R(sxk * 1000) / 1000},${R(syk * 1000) / 1000})`);
       if (this.slabG) {
         const depth = [].concat(c.slab)[0].depth || 12;
         this.slabG.setAttribute('transform', `translate(${R(-Math.sin(yaw) * depth / kx)},0)`);
       }
       for (const v of this.vols) v.setAttribute('transform', `translate(${R(Math.sin(yaw) * 16)},0)`);
-      this.root.setAttribute('filter', this.boil && this.scene.boil ? `url(#boil${Math.floor(t * 12) % 3})` : 'url(#inkOnly)');
+      /* line boil: the ink is redrawn every frame, 24 a second on High (four
+         drawings), 12 on Low or with the GPU pass off (three) */
+      const bf = window.GFX && GFX.on && GFX.boilFps > 12 ? 24 : 12;
+      /* rim light on High: a warm edge on the side facing the nearest lamp
+         (scenes list their lamps' x and say when the room is dark) */
+      let rim = '';
+      const lamps = this.scene.lamps;
+      if (bf > 12 && lamps && lamps.length && !this.scene.dark && this.boil && this.scene.boil) {
+        const lx = lamps.reduce((m, x) => (Math.abs(x - c.x) < Math.abs(m - c.x) ? x : m), lamps[0]);
+        rim = lx >= c.x ? 'R' : 'L';
+      }
+      const bi = Math.floor(t * bf) % (bf > 12 ? 4 : 3);
+      this.root.setAttribute('filter', this.boil && this.scene.boil ? (rim ? `url(#rim${rim}${bi})` : `url(#boil${bi})`) : 'url(#inkOnly)');
 
       const air = c.shadowFixed ? 0 : clamp(-p.hipY / 120);
       sa(this.shadow, { cx: c.shadowFixed ? 0 : R(hx * 0.6), cy: 6, rx: R((c.shadowW == null ? 70 : c.shadowW) * (1 - air * 0.4)), ry: R(13 * (1 - air * 0.4)), opacity: R((1 - air * 0.6) * 10) / 10 });
@@ -493,7 +577,7 @@
         const L = a.side < 0;
         const [s0x, s0y] = c.shoulders[L ? 0 : 1];
         const [sx, sy] = tf(s0x, s0y);
-        const ex = sx + (L ? p.lhx : p.rhx), ey = sy + (L ? p.lhy : p.rhy);
+        const ex = sx + (L ? p.lhx : p.rhx) + hdx, ey = sy + (L ? p.lhy : p.rhy) + hdy;
         const [cx, cy] = elbow(sx, sy, ex, ey, L ? p.lbend : p.rbend, a.side);
         const dd = `M${R(sx)},${R(sy)} Q${R(cx)},${R(cy)} ${R(ex)},${R(ey)}`;
         a.path.setAttribute('d', dd);
@@ -634,6 +718,8 @@
         el('path', { d: 'M-50,-172 Q-44,-202 -16,-212', fill: 'none', stroke: CREAM, 'stroke-width': 9, 'stroke-linecap': 'round', opacity: 0.92 }, hl);
         el('circle', { cx: -56, cy: -150, r: 4.5, fill: CREAM, opacity: 0.85 }, hl);
         return {
+          /* everything made of glass, so a level can shatter it */
+          glass: [glassOff, glassOn, outline, halo, hl, shade, coilGlow, coilHot],
           lidColor: p => hexLerp('#ece3cb', '#ffe57e', clamp(p.glow)),
           update(p) {
             const rx = 70 - p.stretch * 8, ry = 74 + p.stretch * 16, sh = p.turn * 6;
@@ -654,12 +740,17 @@
     });
   }
 
-  function makeOutlet(scene, x, y, scale) {
+  /* opts.probe: the working version for the levels, a real receptacle face you
+     can put a tester's probes into (long neutral slot, short hot slot, round
+     ground hole) and real terminal screws on his sides, so his mouth moves up
+     between his eyes and the face */
+  function makeOutlet(scene, x, y, scale, opts = {}) {
+    const P = !!opts.probe;
     return new Toon(scene, {
       x, y, scale, hipH: 56, stance: 25, limbW: 7.5, gloveScale: 1.32, shadowW: 74, hits: [{ x: 0, y: -165, r: 56 }, { x: 0, y: -72, r: 60 }],
       slab: { d: 'M-48,-200 Q0,-214 48,-200 Q64,-196 62,-176 Q70,-100 58,-36 Q54,-16 34,-16 H-34 Q-54,-16 -58,-36 Q-70,-100 -62,-176 Q-64,-196 -48,-200 Z', fill: '#a8906a', depth: 15 },
       shoulders: [[-50, -112], [50, -112]], hips: [[-17, -22], [17, -22]],
-      face: { x: 0, y: -160, spacing: 17, rx: 13, ry: 18.5, mouthY: 89, mouthW: 21, turnShift: 7, lidColor: '#efe2c2', browW: 5.5, pop: 92, sweatOut: 76, maxOpen: 0.6, maxBrow: 1.2 },
+      face: { x: 0, y: -160, spacing: 17, rx: 13, ry: 18.5, mouthY: P ? 38 : 89, mouthW: P ? 15 : 21, turnShift: 7, lidColor: '#efe2c2', browW: 5.5, pop: 92, sweatOut: 76, maxOpen: P ? 0.45 : 0.6, maxBrow: 1.2 },
       life: { breath: 3.4, bounce: 6, beatOffset: 0.5, sway: 5, lean: 3, nervous: 0.22 },
       pose: { lhx: -32, lhy: 52, rhx: 32, rhy: 52, lbend: 0.35, rbend: 0.35, browTilt: 0.6, browRaise: 0.2, pupil: 0.9, knee: 0.1 },
       disc: { lg: 'palm', rg: 'palm', mouth: 'flat' },
@@ -667,6 +758,20 @@
         el('path', { d: 'M-48,-200 Q0,-214 48,-200 Q64,-196 62,-176 Q70,-100 58,-36 Q54,-16 34,-16 H-34 Q-54,-16 -58,-36 Q-70,-100 -62,-176 Q-64,-196 -48,-200 Z', fill: 'url(#gPlate)', stroke: INK, 'stroke-width': 5.5, 'stroke-linejoin': 'round' }, g);
         volume(g, 'M-48,-200 Q0,-214 48,-200 Q64,-196 62,-176 Q70,-100 58,-36 Q54,-16 34,-16 H-34 Q-54,-16 -58,-36 Q-70,-100 -62,-176 Q-64,-196 -48,-200 Z', -70, -214, 140, 198);
         bulgeShade(g, 'M52,-182 Q63,-104 52,-34 Q46,-24 30,-24', 'M-50,-178 Q-60,-124 -54,-84');
+        if (P) {
+          el('rect', { x: -41, y: -108, width: 82, height: 76, rx: 26, fill: 'url(#gRecep)', stroke: INK, 'stroke-width': 4 }, g);
+          el('path', { d: 'M-32,-96 Q-35,-72 -31,-50', fill: 'none', stroke: '#ffffff', 'stroke-width': 3.5, opacity: 0.7, 'stroke-linecap': 'round' }, g);
+          el('rect', { x: -26, y: -97, width: 9, height: 30, rx: 2.5, fill: INK }, g);
+          el('rect', { x: 17, y: -94, width: 9, height: 21, rx: 2.5, fill: INK }, g);
+          el('path', { d: 'M-8.5,-58 H8.5 V-52 A8.5,8.5 0 0,1 -8.5,-52 Z', fill: INK }, g);
+          /* his terminal screws: brass on the hot side, silver on the neutral
+             side, the green ground screw at his foot */
+          for (const [sx, sy, f] of [[61, -76, 'url(#gScrewBrass)'], [-61, -76, 'url(#gScrewSilver)'], [0, -24, 'url(#gScrewGreen)']]) {
+            el('circle', { cx: sx, cy: sy, r: 9, fill: f, stroke: INK, 'stroke-width': 3 }, g);
+            el('path', { d: `M${sx - 5},${sy - 2} L${sx + 5},${sy + 2}`, stroke: INK, 'stroke-width': 2.4, 'stroke-linecap': 'round' }, g);
+          }
+          return {};
+        }
         el('rect', { x: -42, y: -100, width: 84, height: 62, rx: 24, fill: 'url(#gRecep)', stroke: INK, 'stroke-width': 4 }, g);
         el('rect', { x: -35, y: -80, width: 6, height: 17, rx: 2, fill: INK }, g);
         el('rect', { x: 29, y: -82, width: 7, height: 20, rx: 2, fill: INK }, g);

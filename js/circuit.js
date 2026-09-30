@@ -18,10 +18,19 @@
     source:    { terminals: ['hot', 'neu', 'gnd'], fixed: { hot: 120, neu: 0, gnd: 0 }, role: { hot: 'hot', neu: 'neutral', gnd: 'ground' } },
     source240: { terminals: ['hotA', 'hotB', 'neu', 'gnd'], fixed: { hotA: 120, hotB: -120, neu: 0, gnd: 0 }, role: { hotA: 'hot', hotB: 'hot', neu: 'neutral', gnd: 'ground' } },
     bulb:      { terminals: ['brass', 'silver'], load: true, role: { brass: 'brass', silver: 'shell' } },
+    /* a lampholder mounted on a steel outlet box: the same load, plus the box's green ground screw */
+    fixture:   { terminals: ['brass', 'silver', 'g'], load: true, role: { brass: 'brass', silver: 'shell', g: 'bond' } },
     /* a single-pole switch: two brass screws, plus the green ground screw on its metal strap/box */
     sp:        { terminals: ['a', 'b', 'g'], states: 2, links: s => (s ? [['a', 'b']] : []), role: { a: 'switch', b: 'switch', g: 'bond' } },
     threeway:  { terminals: ['com', 't1', 't2', 'g'], states: 2, links: s => (s === 0 ? [['com', 't1']] : [['com', 't2']]), role: { com: 'common', t1: 'traveler', t2: 'traveler', g: 'bond' } },
+    /* a porcelain pull-chain lampholder on a steel box: the chain works a little
+       switch inside, between the BRASS screw and the socket's center contact
+       ('tip', internal: nothing lands on it). The filament sits between the center
+       contact and the screw shell (SILVER), so the chain breaks the hot side. */
+    pullchain: { terminals: ['brass', 'silver', 'g', 'tip'], internal: ['tip'], lamp: ['tip', 'silver'], load: true, states: 2, links: s => (s ? [['brass', 'tip']] : []), role: { brass: 'brass', silver: 'shell', g: 'bond', tip: 'tip' } },
   };
+  /* the two points the filament sits between (the lamp's own ends) */
+  const lampEnds = c => (TYPES[c.type].lamp || ['brass', 'silver']).map(t => c.id + '.' + t);
   const LIVE = 1;   /* volts: anything above this is "live" to a tester or a fingertip */
 
   function makeUF() {
@@ -105,7 +114,7 @@
 
     const fixed = new Map();
     for (const s of srcTerms) fixed.set(uf.find(s.term), s.v);
-    const edges = bulbs.map(b => [uf.find(b.id + '.brass'), uf.find(b.id + '.silver')]).filter(([u, v]) => u !== v);
+    const edges = bulbs.map(b => lampEnds(b).map(t => uf.find(t))).filter(([u, v]) => u !== v);
     const adj = new Map();
     for (const [u, v] of edges) {
       if (!adj.has(u)) adj.set(u, []);
@@ -140,7 +149,7 @@
       res.V[t] = nodeV.has(r) ? nodeV.get(r) : null;
     }
     for (const b of bulbs) {
-      const vb = res.V[b.id + '.brass'], vs = res.V[b.id + '.silver'];
+      const [eb, es] = lampEnds(b), vb = res.V[eb], vs = res.V[es];
       const dv = vb == null || vs == null ? 0 : Math.abs(vb - vs);
       const bright = dv / 120;
       const reversed = bright > 0.05 && Math.abs(vs) > Math.abs(vb) + 0.5;
@@ -151,7 +160,7 @@
     const neuRoots = new Set(srcTerms.filter(s => s.role === 'neutral').map(s => uf.find(s.term)));
     const gndRoots = new Set(srcTerms.filter(s => s.role === 'ground').map(s => uf.find(s.term)).filter(r => !neuRoots.has(r)));
     for (const b of bulbs) {
-      const rb = uf.find(b.id + '.brass'), rs = uf.find(b.id + '.silver');
+      const [rb, rs] = lampEnds(b).map(t => uf.find(t));
       for (const [mine, other] of [[rb, rs], [rs, rb]]) {
         if (gndRoots.has(mine) && nodeV.has(other)) res.groundCurrent += Math.abs(nodeV.get(other) - nodeV.get(mine)) / 120;
       }
@@ -164,8 +173,7 @@
     const liveNodes = new Set();
     for (const c of comps) {
       if (TYPES[c.type].load && res.bulbs[c.id] && res.bulbs[c.id].bright > 0.02) {
-        liveNodes.add(res.rootOf[c.id + '.brass']);
-        liveNodes.add(res.rootOf[c.id + '.silver']);
+        for (const t of lampEnds(c)) liveNodes.add(res.rootOf[t]);
       }
     }
     return wires.map(w => {
@@ -193,7 +201,7 @@
 
   const posName = (comps, id, s) => {
     const c = comps.find(x => x.id === id);
-    if (c.type === 'sp') return s ? 'ON' : 'OFF';
+    if (c.type === 'sp' || c.type === 'pullchain') return s ? 'ON' : 'OFF';
     return s ? 'DOWN' : 'UP';
   };
 
@@ -235,8 +243,10 @@
       if (r === 'bond') return [];
       return T.terminals.map(x => c.id + '.' + x).filter(x => x !== t && T.role[x.split('.')[1]] !== 'bond');
     };
+    /* an internal contact (a pull-chain socket's center contact) has no screw to walk to */
+    const internal = t => { const c = compOf(comps, t); return !!c && (TYPES[c.type].internal || []).includes(t.split('.')[1]); };
     const visit = t => {
-      if (seen.has(t)) return;
+      if (seen.has(t) || internal(t)) return;
       seen.add(t); order.push(t);
       for (const n of wiredTo(t)) visit(n);
       for (const p of partners(t)) visit(p);
@@ -263,6 +273,40 @@
     'ground-as-neutral': 'ground', 'neutral-ground-bond': 'ground', 'no-ground': 'ground',
   };
 
+  /* the device terminal where a conductor path finally lands on a panel terminal */
+  function landing(comps, steps) {
+    for (let i = steps.length - 2; i >= 0; i--) if (!TYPES[compOf(comps, steps[i].term).type].fixed) return steps[i].term;
+    return steps[0].term;
+  }
+  /* A bolted fault exactly as it happens in one switch state: which panel
+     terminals meet, the path the fault current takes, and the terminal where it
+     lands (where the arc is). null if that state has no short. */
+  function boltedFaults(level, wires, state, res) {
+    const comps = level.components;
+    const r = res || evaluate(comps, wires, state, true);
+    return r.shortPairs.map(([ta, tb]) => {
+      const ground = roleOf(comps, ta) === 'ground' || roleOf(comps, tb) === 'ground';
+      const hotT = roleOf(comps, ta) === 'hot' ? ta : tb, other = hotT === ta ? tb : ta;
+      const steps = pathBetween(comps, wires, state, hotT, other) || [{ term: hotT }, { term: other }];
+      const last = steps[steps.length - 1];
+      const code = ground ? 'ground-fault' : 'short';
+      return { code, at: [landing(comps, steps), other], state, wire: typeof last.via === 'number' ? last.via : null, from: hotT, to: other, path: steps.map(s => s.term), danger: true, trips: true };
+    });
+  }
+  const boltedAt = (level, wires, state) => boltedFaults(level, wires, state)[0] || null;
+
+  /* Does this bolted fault arc right inside a lampholder? Only when the fault
+     current lands on the socket's own BRASS or SILVER screw is the arc in the
+     socket itself, close enough to crack and burn the lamp. Anywhere else the
+     lamp is simply bypassed. */
+  function atSocket(level, f) {
+    if (!f || !f.trips || !f.at || !f.at[0]) return false;
+    const c = compOf(level.components, f.at[0]);
+    if (!c || !TYPES[c.type].load) return false;
+    const r = roleOf(level.components, f.at[0]);
+    return r === 'brass' || r === 'shell';
+  }
+
   function analyze(level, wires) {
     const comps = level.components;
     const sw = switchIds(comps);
@@ -283,21 +327,16 @@
       if (has(code) && !extra.multi) return;
       faults.push(Object.assign({ code, at, state: offState, wire: null, danger: DANGER.has(code), trips: TRIPS.has(code) }, extra));
     };
-    /* the device terminal where a path finally lands on a panel terminal */
-    const landing = steps => {
-      for (let i = steps.length - 2; i >= 0; i--) if (!TYPES[compOf(comps, steps[i].term).type].fixed) return steps[i].term;
-      return steps[0].term;
-    };
+    const land = steps => landing(comps, steps);
 
-    /* 1. bolted faults */
+    /* 1. bolted faults; "always" says whether every switch position has it (if
+       not, only the positions that energize the faulted path trip the breaker) */
+    const always = rows.every(r => r.res.short);
     for (const row of rows) {
-      for (const [ta, tb] of row.res.shortPairs) {
-        const ground = roleOf(comps, ta) === 'ground' || roleOf(comps, tb) === 'ground';
-        const hotT = roleOf(comps, ta) === 'hot' ? ta : tb, other = hotT === ta ? tb : ta;
-        const steps = pathBetween(comps, wires, row.state, hotT, other) || [{ term: hotT }, { term: other }];
-        const at = landing(steps);
-        const last = steps[steps.length - 1];
-        add(ground ? 'ground-fault' : 'short', [at, other], { state: row.state, wire: typeof last.via === 'number' ? last.via : null, from: hotT, to: other, path: steps.map(s => s.term) });
+      for (const bf of boltedFaults(level, wires, row.state, row.res)) {
+        const { code, at } = bf;
+        delete bf.code; delete bf.at; delete bf.danger; delete bf.trips;
+        add(code, at, Object.assign(bf, { always }));
       }
     }
     const clean = rows.filter(r => !r.res.short);
@@ -347,7 +386,7 @@
            reversed; live while it's off means the switch is in the neutral */
         const rev = litRows.find(r => r.res.bulbs[l].reversed);
         if (rev) add('reversed', [l + '.silver', l + '.brass'], { state: rev.state });
-        const liveOff = clean.find(r => !on(r, l) && [l + '.brass', l + '.silver'].some(t => r.res.V[t] != null && Math.abs(r.res.V[t]) > LIVE));
+        const liveOff = clean.find(r => !on(r, l) && lampEnds(compOf(comps, l + '.x')).some(t => r.res.V[t] != null && Math.abs(r.res.V[t]) > LIVE));
         if (liveOff && sw.length && litRows.length < rows.length && !rev) {
           const swT = sw.flatMap(id => TYPES[compOf(comps, id + '.a').type].terminals.map(x => id + '.' + x))
             .filter(t => roleOf(comps, t) !== 'bond' && liveOff.res.V[t] != null && Math.abs(liveOff.res.V[t]) > LIVE && !rootIn(liveOff, t, hots));
@@ -365,7 +404,7 @@
     for (const row of clean) {
       for (const [ta, tb] of row.res.bonds) {
         const steps = pathBetween(comps, wires, row.state, ta, tb) || [{ term: ta }, { term: tb }];
-        add('neutral-ground-bond', [landing(steps)], { state: row.state, path: steps.map(s => s.term) });
+        add('neutral-ground-bond', [land(steps)],{ state: row.state, path: steps.map(s => s.term) });
       }
     }
     for (const g of bondsT) {
@@ -409,8 +448,16 @@
   }
   function describe(level, f) {
     const comps = level.components, n = t => nameOf(level, t);
-    const swWord = Object.keys(f.state || {}).length === 1 ? `with the switch ${posName(comps, Object.keys(f.state)[0], f.state[Object.keys(f.state)[0]])}, ` : '';
+    const ids = Object.keys(f.state || {}), multi = ids.length > 1;
+    const swName = id => (level.switchNames && level.switchNames[id]) || (multi ? `switch ${id}` : 'the switch');
+    /* a fault that only shows up in some switch positions says which */
+    const swWord = !ids.length || f.always ? '' : `with ${ids.map(id => `${swName(id)} ${posName(comps, id, f.state[id])}`).join(' and ')}, `;
+    const theSwitch = multi ? 'the switches' : 'the switch';
     const at = f.at && f.at[0];
+    /* a pull-chain lampholder carries its own switch: no wall switch in the run */
+    const chain = comps.some(c => c.type === 'pullchain');
+    if (chain && f.code === 'no-hot') return { title: 'No hot at the bulb', msg: `No hot reaches ${n(at)}. Trace it: the panel HOT runs straight to the BRASS screw, and the chain does the switching inside the lampholder. There's a gap before the bulb.` };
+    if (chain && f.code === 'reversed') return { title: 'Reversed polarity', msg: `Hot and neutral are reversed at the lampholder: the hot is on ${n(at)}, so the screw shell, the part your fingers touch changing a bulb, is live the whole time the breaker is ON, chain pulled or not. The chain still works the light, which is why nobody notices. Hot goes to BRASS, neutral to SILVER.` };
     switch (f.code) {
       case 'short': return { title: 'Short circuit!', msg: `This connection creates a short circuit: ${swWord}${n(at)} connects straight to ${n(f.to)} with no bulb in between, so hot meets neutral. Energized, that's a huge fault current, an arc and a tripped breaker.` };
       case 'ground-fault': return { title: 'Ground fault!', msg: `Hot is connected to ground at ${n(at)}: ${swWord}the hot runs straight onto the grounding path. Energized, fault current races down the ground wire and trips the breaker, with an arc where it lands.` };
@@ -418,18 +465,23 @@
       case 'hot-enclosure': return { title: 'Live metal!', msg: `Ground is improperly connected: ${n(at)} is carrying the HOT, and that metal box isn't grounded. Energized, the whole box sits at 120 volts waiting for a hand, and nothing trips. The green screw is only for the bare or green ground wire.` };
       case 'series': return { title: 'Dim bulbs', msg: 'The bulbs glow at half brightness. They are wired in series, so they split the 120 volts between them. Give each bulb its own hot-to-neutral path (parallel) so each one gets the full 120.' };
       case 'neutral-missing': return { title: 'Neutral is missing', msg: `Neutral is missing from the fixture: ${n(at)} isn't connected back to the panel NEUTRAL. The current has no way home, so the bulb can't light.` };
-      case 'no-hot': return { title: 'No hot at the bulb', msg: `No hot reaches ${n(at)}. Trace it: panel HOT, through the switch, to the BRASS screw. There's a gap before the bulb.` };
+      case 'no-hot': return { title: 'No hot at the bulb', msg: multi
+        ? `No hot reaches ${n(at)}. Trace it: panel HOT to the COMMON of one 3-way, across the travelers, out the COMMON of the other 3-way, to the BRASS screw. There's a gap before the bulb.`
+        : `No hot reaches ${n(at)}. Trace it: panel HOT, through the switch, to the BRASS screw. There's a gap before the bulb.` };
       case 'switch-arrangement': return { title: 'Can\'t complete the circuit', msg: 'This switch arrangement can\'t complete the circuit: hot reaches the bulb and neutral comes home, but no switch position ever connects them into one loop.' };
       case 'hot-on-traveler': return { title: 'Hot on a traveler', msg: `The hot landed on a traveler screw (${n(at)}) instead of the COMMON. On a 3-way, the dark COMMON screw takes the hot (or feeds the bulb); the two brass screws are the travelers.` };
-      case 'traveler-on-common': return { title: 'Traveler on the common', msg: `A traveler landed on the common terminal at ${n(at)}. The travelers run brass-to-brass between the two 3-ways; the COMMON screws take the hot and the bulb feed.` };
+      case 'traveler-on-common': return { title: 'Traveler on the common', msg: `A traveler is connected to the common terminal at ${n(at)}. The two travelers run brass-to-brass between the 3-ways; each dark COMMON screw takes either the incoming hot or the switched leg to the light, never a traveler.` };
       case 'not-3way': return { title: 'Not quite three-way', msg: 'This switch arrangement can\'t control the light from both switches: flipping either switch should ALWAYS change the light. Hot to one COMMON, bulb feed from the other COMMON, travelers brass-to-brass.' };
-      case 'bypass': return { title: 'Switch bypassed', msg: `The switch isn't in the bulb's path: ${n(at)} gets hot without going through the switch, so the switch has nothing to interrupt and the bulb stays on.` };
+      case 'bypass': return { title: multi ? 'Switches bypassed' : 'Switch bypassed', msg: `${multi ? 'The switches aren\'t' : 'The switch isn\'t'} in the bulb's path: ${n(at)} gets hot without going through ${theSwitch}, so there's nothing to interrupt it and the bulb stays on.` };
       case 'inverted': return { title: 'Upside down?', msg: 'The bulb lights when the switch says OFF. The switch should close the path when it is ON.' };
-      case 'reversed': return { title: 'Reversed polarity', msg: `Hot and neutral are reversed at the lampholder: the switched hot is on ${n(at)}, so the screw shell, the part your fingers touch changing a bulb, is live whenever the switch is ON. Hot goes to BRASS, neutral to SILVER.` };
-      case 'switched-neutral': return { title: 'Switched the neutral', msg: `The switch is in the NEUTRAL, not the hot. With the switch OFF, ${n(at)} and the socket are still live at 120 volts. A switch must interrupt the HOT conductor.` };
+      case 'reversed': return { title: 'Reversed polarity', msg: `Hot and neutral are reversed at the lampholder: the switched hot is on ${n(at)}, so the screw shell, the part your fingers touch changing a bulb, is live whenever ${multi ? 'the light is on' : 'the switch is ON'}. Hot goes to BRASS, neutral to SILVER.` };
+      case 'switched-neutral': return { title: 'Switched the neutral', msg: multi
+        ? `The 3-ways are switching the NEUTRAL, not the hot. With the light off, ${n(at)} and the socket are still live at 120 volts. Switches must interrupt the HOT conductor: hot to a COMMON, and the neutral straight to the light's SILVER screw.`
+        : `The switch is in the NEUTRAL, not the hot. With the switch OFF, ${n(at)} and the socket are still live at 120 volts. A switch must interrupt the HOT conductor.` };
       case 'ground-as-neutral': return { title: 'Ground used as neutral', msg: `Ground is improperly connected: ${n(at)} comes home on the GROUND instead of the NEUTRAL, so normal current is flowing on the ground wire. The light works, but the ground must carry no current unless something is wrong.` };
       case 'neutral-ground-bond': return { title: 'Neutral bonded to ground', msg: `Neutral and ground are joined out here at ${n(at)}. They may only be bonded together at the service panel; anywhere else it puts normal current on the grounding path.` };
       case 'no-ground': return { title: 'Missing ground', msg: `The light works, but ${n(at)} isn't connected to the panel GROUND. Without that bare or green ground wire, a fault on that metal box would have nowhere safe to go.` };
+      case 'wrong-color': return { title: 'Wrong colour', msg: `The light works, but there's ${COLOR_WORD[f.why] || 'a wrong colour'} at ${n(at)}. The next person to open this box goes by the colours: black (or red) is hot, white is the neutral, green or bare is the ground. A colour that lies can kill somebody.` };
       default: return { title: 'Something\'s off', msg: 'The wiring doesn\'t do what it should.' };
     }
   }
@@ -448,25 +500,166 @@
      is an equipment grounding conductor and must be green (or bare). With the
      power on, a wire on the neutral in EVERY switch position must be white; a wire
      that is hot in ANY position (switch legs and travelers included) must never be
-     white or green. Wires with no voltage at all are ignored. */
+     white or green. Wires with no voltage at all are ignored.
+     'taped' is a white conductor of a cable permanently re-identified with black
+     tape: allowed as a hot (the supply to a switch, or a traveler between 3-ways),
+     but never as the switched return from a switch to the light, and a real
+     neutral must never be taped. */
   function colorCheck(level, wires) {
     const comps = level.components;
     const runs = combos(switchIds(comps)).map(state => evaluate(comps, wires, state, true));
     const bad = [];
     if (runs.some(r => r.short)) return { ok: true, bad };
+    const onLoad = t => { const c = compOf(comps, t); return !!c && !!TYPES[c.type].load && roleOf(comps, t) !== 'bond'; };
     wires.forEach((w, i) => {
       const grounding = [w.a, w.b].some(t => ['ground', 'bond'].includes(roleOf(comps, t)));
       const vs = runs.map(r => r.V[w.a]);
-      const hotAny = vs.some(v => v != null && Math.abs(v) > LIVE);
+      const live = v => v != null && Math.abs(v) > LIVE;
+      const hotAny = vs.some(live), hotAll = vs.every(live);
       const zeroAll = vs.every(v => v != null && Math.abs(v) <= LIVE);
       if (grounding) { if (w.color !== 'green' && w.color !== 'bare') bad.push({ i, why: 'ground-not-green' }); }
       else if (hotAny && (w.color === 'white' || w.color === 'green')) bad.push({ i, why: w.color === 'white' ? 'white-hot' : 'green-hot' });
+      else if (hotAny && w.color === 'taped' && !hotAll && (onLoad(w.a) || onLoad(w.b))) bad.push({ i, why: 'taped-return' });
+      else if (zeroAll && w.color === 'taped') bad.push({ i, why: 'taped-neutral' });
       else if (zeroAll && w.color !== 'white') bad.push({ i, why: w.color === 'green' ? 'green-neutral' : 'neutral-not-white' });
     });
     return { ok: bad.length === 0, bad };
   }
 
-  const api = { TYPES, DANGER, TRIPS, evaluate, wireInfo, checkGoal, analyze, describe, nameOf, route, touch, pathBetween, roleOf, switchIds, combos, posName, colorCheck };
+  /* ---------- the Phantom's traveler prank ---------- */
+  /* Does every lamp change whenever ANY switch is flipped, from every position? */
+  function togglesEverywhere(level, wires) {
+    const comps = level.components, sw = switchIds(comps), lamps = comps.filter(c => TYPES[c.type].load).map(c => c.id);
+    if (!sw.length || !lamps.length) return false;
+    const lit = s => { const r = evaluate(comps, wires, s, true); return r.short ? 'short' : lamps.map(l => (r.bulbs[l].bright > 0.9 ? 1 : 0)).join(); };
+    for (const s of combos(sw)) {
+      const here = lit(s);
+      if (here === 'short') return false;
+      for (const id of sw) if (lit(Object.assign({}, s, { [id]: 1 - s[id] })) === here) return false;
+    }
+    return true;
+  }
+  /* Swap where the two travelers land on 3-way `sid`. Only when there are
+     exactly two travelers, each running traveler screw to traveler screw between
+     two different switches. Returns the new wiring (copies) or null. */
+  function swapTravelers(level, wires, sid) {
+    const comps = level.components;
+    const pair = [];
+    wires.forEach((w, i) => { if (roleOf(comps, w.a) === 'traveler' && roleOf(comps, w.b) === 'traveler' && compOf(comps, w.a).id !== compOf(comps, w.b).id) pair.push(i); });
+    if (pair.length !== 2) return null;
+    const ends = pair.map(i => (wires[i].a.split('.')[0] === sid ? 'a' : wires[i].b.split('.')[0] === sid ? 'b' : null));
+    if (ends.includes(null)) return null;
+    const from = [wires[pair[0]][ends[0]], wires[pair[1]][ends[1]]];
+    if (from[0] === from[1]) return null;
+    const out = wires.map(w => Object.assign({}, w));
+    out[pair[0]][ends[0]] = from[1]; out[pair[1]][ends[1]] = from[0];
+    return { wires: out, pair, ends, from };
+  }
+  /* Harmless means: the job worked before and still works after (the light
+     changes on every flip of either switch, no short anywhere), and the swap
+     adds or removes no fault of any kind. A 3-way has no traveler polarity, so
+     on a good job this is always true; swapping only changes which switch
+     positions are the ON ones. */
+  function swapHarmless(level, before, after) {
+    if (!togglesEverywhere(level, before) || !togglesEverywhere(level, after)) return false;
+    const codes = w => analyze(level, w).faults.map(f => f.code).sort().join();
+    return codes(before) === codes(after);
+  }
+
+  /* ---------- the toolbox: know your conductors, and test before you touch ---------- */
+  /* A neon tester glows when its tip meets a live conductor. */
+  const neonGlows = volts => volts != null && Math.abs(volts) > LIVE;
+  /* A two-lead neon tester: the lamp sits between the two probes, so it only
+     strikes when there's a real voltage BETWEEN them (a neon lamp needs roughly
+     60 V or more). A probe on a conductor that goes nowhere (null) completes no
+     circuit, so it reads nothing. */
+  const NEON_STRIKE = 60;
+  const neonBetween = (va, vb) => va != null && vb != null && Math.abs(va - vb) >= NEON_STRIKE;
+  /* What each terminal sits at with the breaker OFF: the hot is disconnected,
+     but the neutral bar and the ground bar are still bonded to earth at the
+     service, and so is anything wired to them. Everything else goes nowhere. */
+  function restVolts(level, wires, state) {
+    const comps = level.components, uf = makeUF(), all = termsOf(comps);
+    all.forEach(t => uf.find(t));
+    for (const w of wires) uf.union(w.a, w.b);
+    for (const c of comps) { const T = TYPES[c.type]; if (T.links) for (const [x, y] of T.links((state || {})[c.id] || 0)) uf.union(c.id + '.' + x, c.id + '.' + y); }
+    const earth = new Set(all.filter(t => ['neutral', 'ground'].includes(roleOf(comps, t)) && TYPES[compOf(comps, t).type].fixed).map(t => uf.find(t)));
+    const V = {};
+    for (const t of all) V[t] = earth.has(uf.find(t)) ? 0 : null;
+    return V;
+  }
+  /* the voltage under a probe on the circuit, breaker ON (powered) or OFF */
+  const probeVolts = (level, wires, state, powered) => (powered ? evaluate(level.components, wires, state, true).V : restVolts(level, wires, state));
+  /* The known live source: a receptacle on its own circuit (CKT 2) that's never
+     switched off. Short slot = hot, long slot = neutral, round hole = ground. */
+  const RECEPTACLE = { 'X.hot': 120, 'X.neu': 0, 'X.gnd': 0 };
+  const RECEP_FAMILY = { 'X.hot': 'hot', 'X.neu': 'neutral', 'X.gnd': 'ground' };
+  /* What a test between two probe points counts as: on the known live source
+     ('known'), on the panel conductors of the circuit you're about to work on
+     ('work'), or neither (null). pair: 'hn' hot-to-neutral, 'hg' hot-to-ground,
+     'ng' neutral-to-ground. */
+  function testPair(level, a, b) {
+    const known = a in RECEPTACLE && b in RECEPTACLE;
+    const src = t => { const c = compOf(level.components, t); return !!c && !!TYPES[c.type].fixed; };
+    const work = !known && src(a) && src(b);
+    if (!known && !work) return null;
+    const fam = t => (t in RECEPTACLE ? RECEP_FAMILY[t] : familyOf(level, t));
+    const f = [fam(a), fam(b)].sort().join('-');
+    const pair = { 'hot-neutral': 'hn', 'ground-hot': 'hg', 'ground-neutral': 'ng' }[f] || null;
+    return pair ? { on: known ? 'known' : 'work', pair } : null;
+  }
+  /* Live-dead-live: a dead reading only counts if the tester is proven working
+     on a known live source just before AND just after it. log is the tests in
+     order: { known: true } for the known live source, false for the circuit you
+     are about to work on, each with glow: true/false and (for a two-lead
+     tester) pair: 'hn' / 'hg' / 'ng'. On the circuit, BOTH hot-to-neutral and
+     hot-to-ground must read dead (an entry with no pair counts as both).
+     stage 0 = tester not proven yet, 1 = tester works, 2 = circuit read dead,
+     3 = proven dead. A glow on the circuit means it's live (back to 1); no glow
+     on the known source means the tester can't be trusted (back to 0), except
+     neutral-to-ground, which is dead on a good receptacle anyway and proves
+     nothing either way. */
+  function proveDead(log) {
+    let stage = 0, live = false, seen = new Set();
+    for (const t of log) {
+      if (t.known) {
+        if (t.pair === 'ng') continue;
+        stage = t.glow ? (stage >= 2 ? 3 : 1) : 0;
+        if (stage < 2) seen = new Set();
+      } else if (t.glow) { stage = stage ? 1 : 0; live = true; seen = new Set(); }
+      else if (stage === 1) {
+        (t.pair ? [t.pair] : ['hn', 'hg']).forEach(p => seen.add(p));
+        if (seen.has('hn') && seen.has('hg')) { stage = 2; live = false; }
+      }
+    }
+    return { stage, dead: stage === 3, live, seen: [...seen] };
+  }
+  /* The Inspector's colour findings, as faults he can walk to: the wire's end
+     on the device (not the panel), and what's wrong with its insulation. */
+  const COLOR_WORD = { 'white-hot': 'a WHITE wire carrying the HOT', 'green-hot': 'a GREEN wire carrying the HOT', 'ground-not-green': 'a ground that isn\'t green', 'neutral-not-white': 'a neutral that isn\'t white', 'green-neutral': 'a GREEN wire used as the neutral', 'taped-return': 'a taped white as the switched leg', 'taped-neutral': 'a real neutral taped as a hot' };
+  function colorFaults(level, wires) {
+    const comps = level.components;
+    const devEnd = w => (TYPES[compOf(comps, w.a).type].fixed ? w.b : w.a);
+    return colorCheck(level, wires).bad.map(b => ({ code: 'wrong-color', why: b.why, color: wires[b.i].color, at: [devEnd(wires[b.i])], wire: b.i, state: {}, danger: false, trips: false }));
+  }
+  /* which conductor belongs on a terminal: the hot family (black, or red),
+     the neutral (white) or the equipment ground (green or bare) */
+  const FAMILY = { hot: 'hot', brass: 'hot', switch: 'hot', common: 'hot', traveler: 'hot', neutral: 'neutral', shell: 'neutral', ground: 'ground', bond: 'ground' };
+  const familyOf = (level, term) => FAMILY[roleOf(level.components, term)] || null;
+  const COLORS_FOR = { hot: ['black', 'red'], neutral: ['white'], ground: ['green', 'bare'] };
+  /* One conductor from a to b in a colour: is it the right conductor for both
+     ends? null if so, else why not: 'cross' (the ends want different
+     conductors, like hot onto a silver screw) or 'color' (right screws, wrong
+     insulation colour), with what each end wants. */
+  function landingCheck(level, a, b, color) {
+    const fa = familyOf(level, a), fb = familyOf(level, b);
+    if (fa && fb && fa !== fb) return { why: 'cross', want: [fa, fb] };
+    const fam = fa || fb;
+    if (fam && !COLORS_FOR[fam].includes(color)) return { why: 'color', want: [fam, fam], colors: COLORS_FOR[fam] };
+    return null;
+  }
+
+  const api = { TYPES, DANGER, TRIPS, evaluate, wireInfo, checkGoal, analyze, describe, nameOf, route, touch, pathBetween, roleOf, switchIds, combos, posName, colorCheck, boltedAt, atSocket, togglesEverywhere, swapTravelers, swapHarmless, neonGlows, proveDead, familyOf, landingCheck, NEON_STRIKE, neonBetween, restVolts, probeVolts, RECEPTACLE, testPair, colorFaults };
   root.Circuit = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -23,6 +23,7 @@
 <div id="app">
   <div id="frame">
     <svg id="stage" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A home electrician's workbench at night. A live wire has burst out of the wall and lurks over the bench, now and then creeping up to poke one of the nervous parts: a light bulb, an outlet, a multimeter and an access control board reading a book. A fuse and a light switch sometimes try to sneak across the back of the bench."></svg>
+    <canvas id="gfx" aria-hidden="true"></canvas>
 
     <nav id="menu" aria-label="Main menu">
       <button class="menu-item" data-go="start" type="button"><svg class="hand" viewBox="-8 -20 64 40" aria-hidden="true"><use href="#gl-point"/></svg><span>Start Wiring</span></button>
@@ -45,6 +46,7 @@
         <button class="swatch" type="button" data-color="#f1ead8" aria-pressed="false" aria-label="White wire (neutral)" style="--c:#f1ead8"></button>
         <button class="swatch" type="button" data-color="#c7322b" aria-pressed="false" aria-label="Red wire (switched hot or traveler)" style="--c:#c7322b"></button>
         <button class="swatch" type="button" data-color="#3f8a4c" aria-pressed="false" aria-label="Green wire (ground)" style="--c:#3f8a4c"></button>
+        <button class="swatch taped" type="button" data-color="#ebe2cc" aria-pressed="false" aria-label="White wire re-marked with black tape (a hot: traveler or switch supply only)" title="White re-marked with black tape: only as a hot, like a traveler" style="--c:#ebe2cc" hidden></button>
         <button class="hud-btn tester" id="btnTester" type="button" aria-pressed="false" title="Neon voltage tester (T)">Tester</button>
         <span class="tool-gap"></span>
         <button class="hud-btn" id="btnHint" type="button">Hint</button>
@@ -61,6 +63,7 @@
     <div id="vignette" aria-hidden="true"></div>
     <div id="flicker" aria-hidden="true"></div>
     <div id="iris" aria-hidden="true"></div>
+    <div id="jobCard" hidden role="status"><div class="jc"><p class="jc-num"></p><h2 class="jc-name"></h2></div></div>
 
     <section class="card report" id="resultCard" hidden aria-labelledby="resultTitle">
       <div class="report-head"><span>Board of Electrical Inspection</span><span>Form 1-SP</span></div>
@@ -77,27 +80,51 @@
           <li data-k="colors"><span class="hole"></span>Right colours: white neutral, green ground, hot never white or green</li>
           <li data-k="fewest"><span class="hole"></span>No spare wire (four will do)</li>
           <li data-k="noHints"><span class="hole"></span>No hints</li>
+          <li data-k="bonus" hidden><span class="hole"></span>Inspector's bonus question</li>
         </ul>
+      </div>
+      <div class="bonus" id="bonusQ" hidden>
+        <p class="bonus-q"><b>Inspector's bonus:</b> why can the two travelers be swapped?</p>
+        <div class="bonus-a">
+          <button type="button" class="card-btn bonus-btn" data-ok="1">Either traveler can carry the hot</button>
+          <button type="button" class="card-btn bonus-btn" data-ok="0">Travelers carry the neutral</button>
+          <button type="button" class="card-btn bonus-btn" data-ok="0">The bulb isn't polarized</button>
+        </div>
+        <p class="bonus-why" id="bonusWhy" aria-live="polite"></p>
       </div>
       <div class="card-row">
         <button type="button" class="card-btn" id="resultRetry" data-close>Back to the board</button>
+        <button type="button" class="card-btn" id="resultNext" hidden>Next job: Level 2</button>
         <button type="button" class="card-btn alt" id="resultMenu" hidden>Back to the menu</button>
       </div>
+    </section>
+
+    <section class="card jobsign" id="levelCard" hidden aria-labelledby="levelTitle">
+      <h2 id="levelTitle">Pick a Job</h2>
+      <p class="sign-sub">Chapter 1 · Lighting</p>
+      <div class="jobs">
+        <button type="button" class="job" data-level="lvl11">1.1 Toolbox</button>
+        <button type="button" class="job" data-level="lvl12">1.2 Pull Chain</button>
+        <button type="button" class="job" data-level="level">1.3 Flip the Switch</button>
+        <button type="button" class="job" data-level="level2">1.7 Stairway Lights</button>
+      </div>
+      <button type="button" class="sign-back" data-close>Not yet</button>
     </section>
 
     <section class="card" id="howCard" hidden aria-labelledby="howTitle">
       <h2 id="howTitle">How to Wire</h2>
       <ul class="rules">
-        <li><b>Kill the power first.</b> In this game, wires can't be touched while the breaker is on.</li>
+        <li><b>Kill the power first.</b> Never work on a live circuit. A breaker doesn't trip when a person gets shocked: it protects the wire, not you.</li>
+        <li><b>The neon tester shows what's live.</b> It's in the toolbox, and it's optional. A two-lead neon tester only glows when there's voltage between its two probes: touch one probe to a screw or a slot, then the other.</li>
         <li><b>Black is hot, white is neutral, green (or bare) is ground.</b> Red usually carries a switched hot or the travelers between 3-way switches.</li>
         <li><b>Hot goes to brass, neutral goes to silver.</b> The silver screw feeds the socket shell, the part your fingers touch.</li>
         <li><b>A switch breaks the hot, never the neutral.</b> Otherwise the socket stays live even when the light is off.</li>
         <li><b>Ground the metal.</b> The green wire runs from the panel's ground bar to the green screw on the box. It carries no current unless something goes wrong, and then it trips the breaker.</li>
         <li><b>Neutral and ground meet only in the panel.</b> Joining them anywhere else puts normal current on the ground.</li>
-        <li><b>On a 3-way, the dark screw is COMMON.</b> The two brass screws are TRAVELERS.</li>
+        <li><b>On a 3-way, the dark screw is COMMON.</b> The two brass screws are TRAVELERS. Hot goes to one switch's common, the other common feeds the light, and the travelers run brass-to-brass (usually the red and black of a 14/3 cable). A white used as a traveler gets re-marked with black tape.</li>
         <li><b>Never let hot touch neutral or ground directly.</b> With nothing in between, that's a short: fault current, an arc, and a tripped breaker.</li>
       </ul>
-      <p class="small">In a puzzle: drag from one screw to another to run a wire (or tap one screw, then another), then wrap it round the screw clockwise with the brass grip. Two wires on one screw get pigtailed with a wire nut. Tap a wire to cut it. B flips the breaker, S flips the switch, T picks up the neon tester.</p>
+      <p class="small">In a puzzle: drag from one screw to another to run a wire (or tap one screw, then another), then wrap it round the screw clockwise with the brass grip. Two wires on one screw get pigtailed with a wire nut. Tap a wire to cut it. B flips the breaker, S flips the switch or pulls the chain (D flips the second 3-way), T takes the neon tester out of the toolbox: touch one probe to a screw or a receptacle slot, then the other.</p>
       <p class="small">This game simplifies things for learning. Your instructor and the NEC have the final word.</p>
       <p class="small copy">© 2026 Ethan Davis. All rights reserved.</p>
       <button type="button" class="card-btn" data-close>Got it</button>
@@ -109,6 +136,7 @@
       <div class="field"><label for="sfxVol">Sound effects</label><input id="sfxVol" type="range" min="0" max="100"></div>
       <div class="field check"><input id="scares" type="checkbox"><label for="scares">Scary stuff (the live wire, the wire spider and evil laughs)</label></div>
       <div class="field check"><input id="filmFx" type="checkbox"><label for="filmFx">Old-film effects (grain, flicker, wobbly ink)</label></div>
+      <div class="field"><label for="fxQ">Effects quality</label><select id="fxQ"><option value="auto">Auto</option><option value="high">High (lighting, bloom, grain)</option><option value="low">Low (lighter on phones)</option><option value="off">Off (classic look)</option></select></div>
       <button type="button" class="card-btn" data-close>Done</button>
     </section>
 
@@ -127,6 +155,7 @@
 <script src="js/toon.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/fx.js"></script>
+<script src="js/gfx.js"></script>
 <script src="js/circuit.js"></script>
 <script src="js/app.js"></script>
 <script src="js/menu.js"></script>

@@ -62,6 +62,62 @@ body { margin: 0; background: var(--night); color: var(--paper); font-family: va
     linear-gradient(90deg, #8a5a30 0 20%, var(--ink) 20% 24%, transparent 24% 76%, var(--ink) 76% 80%, #8a5a30 80%),
     repeating-linear-gradient(180deg, var(--c) 0 .3cqw, color-mix(in srgb, var(--c) 62%, #000) .3cqw .4cqw); }
 .swatch[aria-pressed="true"] { transform: translateY(-.35cqw) rotate(-4deg); box-shadow: .18cqw .5cqw 0 var(--ink), 0 0 0 .22cqw #ffd84a; }
+/* a white conductor re-marked with two wraps of black tape */
+.swatch.taped { background:
+    linear-gradient(90deg, #8a5a30 0 20%, var(--ink) 20% 24%, transparent 24% 76%, var(--ink) 76% 80%, #8a5a30 80%),
+    linear-gradient(90deg, transparent 0 32%, #1c1c1e 32% 42%, transparent 42% 58%, #1c1c1e 58% 68%, transparent 68%),
+    repeating-linear-gradient(180deg, var(--c) 0 .3cqw, color-mix(in srgb, var(--c) 62%, #000) .3cqw .4cqw); }
+.swatch[hidden] { display: none; }
+/* the job picker: an old painted plank sign hung on two chains. menu.js drops
+   it in, swings it and yanks it back out; the transform is its own */
+#levelCard.jobsign { top: 7cqh; left: 50%; width: min(33cqw, 92%); max-height: none; overflow: visible; padding: 1.5cqw 1.9cqw 1.3cqw; text-align: center; color: #fbeac0; transform: translate(-50%, 0); transform-origin: 50% -7cqh; touch-action: manipulation;
+  background:
+    radial-gradient(circle at 1.4cqw 1.4cqw, #e8e2d2 0 .22cqw, #55595c .28cqw .42cqw, transparent .46cqw),
+    radial-gradient(circle at calc(100% - 1.4cqw) 1.4cqw, #e8e2d2 0 .22cqw, #55595c .28cqw .42cqw, transparent .46cqw),
+    linear-gradient(180deg, rgba(255, 222, 160, .16), transparent 28%, transparent 70%, rgba(0, 0, 0, .22)),
+    repeating-linear-gradient(180deg, transparent 0 6.2cqw, rgba(36, 18, 6, .6) 6.2cqw 6.42cqw),
+    repeating-linear-gradient(91deg, rgba(80, 44, 16, .2) 0 .25cqw, transparent .25cqw 2.1cqw),
+    linear-gradient(180deg, #9d6838, #7e4f28 60%, #6b3f1f);
+  border: .32cqw solid var(--ink); border-radius: .7cqw;
+  box-shadow: inset 0 0 0 .42cqw #b98a55, inset 0 0 0 .6cqw rgba(28, 19, 14, .8), .45cqw 1cqw 0 rgba(10, 5, 2, .45), 0 2.4cqw 3.2cqw rgba(0, 0, 0, .55); }
+/* the two chains, up into the dark (the frame clips them) */
+#levelCard.jobsign::before, #levelCard.jobsign::after { content: ''; position: absolute; bottom: calc(100% - .9cqw); width: 1.25cqw; height: 60cqh; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='26' viewBox='0 0 12 26'%3E%3Crect x='4.3' y='9' width='3.4' height='17' rx='1.7' fill='%23767a7e' stroke='%231c130e' stroke-width='1.3'/%3E%3Cellipse cx='6' cy='7' rx='4.1' ry='6' fill='none' stroke='%231c130e' stroke-width='3.3'/%3E%3Cellipse cx='6' cy='7' rx='4.1' ry='6' fill='none' stroke='%23c9ccce' stroke-width='1.7'/%3E%3C/svg%3E") center bottom / 100% auto repeat-y; }
+#levelCard.jobsign::before { left: calc(1.4cqw - .62cqw); }
+#levelCard.jobsign::after { right: calc(1.4cqw - .62cqw); }
+#levelCard.jobsign h2 { margin: .2cqw 0 0; font-size: 2.5cqw; color: #fbeac0; text-shadow: .14cqw .14cqw 0 #c7322b, .28cqw .28cqw 0 var(--ink); letter-spacing: .04em; }
+#levelCard .sign-sub { margin: .1cqw auto .8cqw; font-size: 1cqw; letter-spacing: .28em; text-transform: uppercase; color: #ecd8a8; opacity: .85; }
+#levelCard .jobs { display: grid; gap: .55cqw; margin: 0; }
+#levelCard .job { appearance: none; cursor: pointer; display: flex; align-items: center; gap: .9cqw; min-height: 3.5cqw; padding: .3cqw 1cqw; text-align: left; font-family: var(--display); font-size: 1.5cqw; line-height: 1.1; letter-spacing: .03em; color: var(--ink);
+  background: linear-gradient(180deg, #fbf1d4, #ecd6a2 70%, #d9bd82); border: .22cqw solid var(--ink); border-radius: .45cqw; box-shadow: inset 0 .14cqw 0 rgba(255, 255, 255, .7), .18cqw .26cqw 0 var(--ink); transition: transform .08s; }
+#levelCard .job .jn { flex: none; min-width: 2.6cqw; font-family: var(--type); font-size: 1.2cqw; color: #a3261c; }
+#levelCard .job .jt { flex: 1; }
+#levelCard .job .js { flex: none; width: 1.7cqw; height: 1.7cqw; color: #2f7a47; }
+#levelCard .job .js svg { display: block; width: 100%; height: 100%; }
+#levelCard .job:disabled { cursor: default; color: #4e3e2c; background: linear-gradient(180deg, #bfae8c, #a18f6e); box-shadow: inset 0 .14cqw 0 rgba(255, 255, 255, .25), .12cqw .16cqw 0 var(--ink); }
+#levelCard .job:disabled .jn { color: #5e4a36; }
+#levelCard .job:disabled .js { color: #3a2a1a; }
+#levelCard .job:not(:disabled):hover, #levelCard .job:focus-visible { transform: translate(-.12cqw, -.18cqw) rotate(-.5deg); background: linear-gradient(180deg, #fff8e0, #f4e0b0); }
+#levelCard .job:focus-visible, #levelCard .sign-back:focus-visible { outline: .22cqw dashed #ffd84a; outline-offset: .2cqw; }
+#levelCard .job:not(:disabled):active { transform: translate(.12cqw, .18cqw); box-shadow: .06cqw .08cqw 0 var(--ink); }
+#levelCard .sign-back { appearance: none; cursor: pointer; margin-top: .9cqw; padding: .35cqw 1.4cqw; font-family: var(--display); font-size: 1.2cqw; letter-spacing: .06em; color: #fbeac0; background: #20392f; border: .2cqw solid var(--ink); border-radius: .4cqw; box-shadow: .16cqw .22cqw 0 var(--ink); }
+#levelCard .sign-back:hover { filter: brightness(1.15); }
+.touch #levelCard.jobsign { top: 4cqh; width: min(44cqw, 92%); padding: 1.1cqw 1.6cqw 1cqw; transform-origin: 50% -4cqh; }
+.touch #levelCard .job { min-height: 44px; font-size: max(1.5cqw, 14px); }
+.touch #levelCard .job .jn { font-size: max(1.2cqw, 12px); }
+.touch #levelCard .job .js { width: max(1.7cqw, 18px); height: max(1.7cqw, 18px); }
+.touch #levelCard .sign-back { min-height: 44px; font-size: max(1.2cqw, 13px); }
+.touch #levelCard .sign-sub { display: none; }
+/* the Inspector's bonus question on the Level 2 report: quick, big, skippable */
+.bonus { margin: .2cqw 0 .6cqw; padding-top: .5cqw; border-top: .15cqw dashed #8a6a3a; }
+.bonus-q { margin: 0 0 .3cqw; font-size: 1.15cqw; }
+.bonus-a { display: flex; flex-wrap: wrap; gap: .7cqw; }
+.bonus-btn { margin-top: 0; font-size: 1.1cqw; padding: .45cqw 1.1cqw; }
+.bonus-btn.right { background: #2f7a47; }
+.bonus-btn:disabled { cursor: default; opacity: .5; }
+.bonus-btn.right:disabled { opacity: 1; }
+.bonus-why { margin: .35cqw 0 0; min-height: 1.2em; font-size: 1.05cqw; }
+.touch .bonus-btn { min-height: 44px; font-size: max(1.1cqw, 12px); }
 .hud-btn { appearance: none; cursor: pointer; font-family: var(--display); font-size: 1.02cqw; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); padding: .5cqw 1.05cqw .42cqw;
   background: linear-gradient(180deg, #fcecb0 0%, #e4b957 48%, #b98a2c 100%); border: .22cqw solid var(--ink); border-radius: .45cqw;
   box-shadow: inset 0 .14cqw 0 rgba(255, 250, 220, .85), inset 0 -.2cqw 0 rgba(90, 55, 10, .5), .2cqw .26cqw 0 var(--ink); text-shadow: 0 .08cqw 0 rgba(255, 245, 200, .6); }
@@ -87,11 +143,36 @@ body { margin: 0; background: var(--night); color: var(--paper); font-family: va
 .stamp { flex: none; margin: 0 1cqw .8cqw auto; padding: .25cqw 1.1cqw .15cqw; font-family: var(--display); font-size: 2.3cqw; letter-spacing: .08em; text-transform: uppercase; color: #c52a20; border: .38cqw double #c52a20; border-radius: .5cqw; transform: rotate(-12deg); opacity: 0; mix-blend-mode: multiply; pointer-events: none; }
 .stamp.pass { color: #2f7a47; border-color: #2f7a47; }
 .stamp.go { animation: stampIn .3s cubic-bezier(.2, 1.5, .4, 1) var(--d, .6s) both; }
+/* the stamp lands with a thump: two puffs of dust burst out from under it and
+   the sheet jolts */
+.stamp { position: relative; }
+.stamp::before, .stamp::after { content: ''; position: absolute; top: 50%; width: 3.4cqw; height: 2.2cqw; margin-top: -1.1cqw; border-radius: 50%; background: radial-gradient(circle, rgba(150, 120, 84, .6), rgba(150, 120, 84, 0) 70%); opacity: 0; pointer-events: none; }
+.stamp::before { left: -2.4cqw; }
+.stamp::after { right: -2.4cqw; }
+.stamp.go::before { animation: dustL .65s ease-out calc(var(--d, .6s) + .2s) both; }
+.stamp.go::after { animation: dustR .65s ease-out calc(var(--d, .6s) + .2s) both; }
+@keyframes dustL { 0% { opacity: .95; transform: translate(1.6cqw, .2cqw) scale(.3); } 100% { opacity: 0; transform: translate(-1.3cqw, -.7cqw) scale(1.7); } }
+@keyframes dustR { 0% { opacity: .95; transform: translate(-1.6cqw, .2cqw) scale(.3); } 100% { opacity: 0; transform: translate(1.3cqw, -.7cqw) scale(1.7); } }
+.card.thump { animation: sheetThump .32s ease-out; }
+@keyframes sheetThump { 0% { translate: 0 0; } 18% { translate: 0 .35cqw; } 45% { translate: 0 -.12cqw; } 70% { translate: 0 .05cqw; } 100% { translate: 0 0; } }
+/* HUD and card buttons squash when pressed and spring back when let go */
+.hud-btn, .swatch, .card-btn, #levelCard .job { transition: transform .26s cubic-bezier(.3, 1.9, .5, 1); }
+.hud-btn:active { transform: translate(.15cqw, .2cqw) scale(1.07, .86); transition-duration: .04s; }
+.swatch:active { transform: scale(1.12, .84); transition-duration: .04s; }
+button.card-btn:active { transform: translate(.2cqw, .2cqw) scale(1.05, .88); transition-duration: .04s; }
+#levelCard .job:not(:disabled):active { transform: translate(.12cqw, .18cqw) scale(1.03, .9); transition-duration: .04s; }
+/* the work order flutters on its pin when the text changes */
+#hud .ticket { transform-origin: 50% 0; }
+#hud .ticket.flutter { animation: flutter .7s ease-out; }
+@keyframes flutter { 0% { transform: rotate(.8deg); } 15% { transform: rotate(-2.4deg) skewX(1.5deg); } 35% { transform: rotate(2.2deg) skewX(-1deg); } 55% { transform: rotate(-.9deg); } 75% { transform: rotate(1.4deg); } 100% { transform: rotate(.8deg); } }
+@media (prefers-reduced-motion: reduce) { #hud .ticket.flutter, .card.thump, .stamp.go::before, .stamp.go::after { animation: none; } }
 @keyframes stampIn { from { opacity: 0; transform: rotate(-12deg) scale(2.6); } to { opacity: .9; transform: rotate(-12deg) scale(1); } }
 /* the neon tester is a tool you pick up: while it's in hand the pointer becomes the pen */
 .hud-btn.tester { background: linear-gradient(180deg, #ffe2a8 0%, #f2a33a 50%, #b86a14 100%); }
 .hud-btn.tester[aria-pressed="true"] { transform: translate(.15cqw, .2cqw); background: linear-gradient(180deg, #ffc27a, #ff7a2a); box-shadow: inset 0 .3cqw .5cqw rgba(80, 30, 0, .5), .05cqw .06cqw 0 var(--ink); }
-#frame.testing #stage { cursor: none; }
+/* with the tester in hand the pointer stays visible: a crosshair marks exactly
+   where the next probe lands (cp-v7: it used to vanish) */
+#frame.testing #stage, #frame.testing #stage * { cursor: crosshair; }
 /* the Journeyman's card: stiff manila with holes punched for each bit of craft */
 .punch { margin: .2cqw 0 1cqw; padding: .6cqw 1.1cqw .7cqw; font-size: 1.1cqw; background: linear-gradient(180deg, #f6e7b8, #e8d096); border: .18cqw solid #8a6a3a; border-radius: .3cqw; box-shadow: .2cqw .25cqw 0 rgba(58, 36, 20, .35); transform: rotate(.6deg); }
 .punch-head { display: flex; justify-content: space-between; margin-bottom: .45cqw; padding-bottom: .2cqw; font-family: var(--display); font-size: 1.2cqw; color: #7a3a14; border-bottom: .12cqw solid #8a6a3a; }
@@ -159,10 +240,26 @@ body { margin: 0; background: var(--night); color: var(--paper); font-family: va
 .field.check { grid-template-columns: auto 1fr; }
 .field input[type=range] { width: 100%; accent-color: var(--red); }
 .field input[type=checkbox] { width: 1.6cqw; height: 1.6cqw; accent-color: var(--red); margin: 0; }
+.field select { justify-self: start; min-width: 16cqw; min-height: 32px; padding: .2cqw .8cqw; font: inherit; color: var(--ink); background: var(--paper); border: .15cqw solid var(--ink); border-radius: .4cqw; cursor: pointer; }
+/* the GPU light pass: over the stage and the menu sign, under the HUD and cards.
+   hard-light: 50% grey leaves a pixel alone, darker multiplies, lighter screens */
+#gfx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; mix-blend-mode: hard-light; }
+.gfx #tint, .gfx #vignette { display: none; }
 
 /* intro title card + film leader */
 #intro { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; cursor: pointer; background: radial-gradient(ellipse at center, #3a2415, #0b0604 75%); }
 #intro:focus-visible { outline: none; }
+/* the painted title card: a slow sunburst behind it, watercolour paper over it
+   (when the GPU pass made some), a flickering projector beam and gate weave */
+#intro { overflow: hidden; }
+#intro::before { content: ''; position: absolute; inset: -30%; background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(255, 214, 140, .075) 0 5deg, transparent 5deg 10deg); pointer-events: none; animation: introSpin 90s linear infinite, introFlick .5s steps(4) infinite; }
+#intro::after { content: ''; position: absolute; inset: 0; background: var(--paperTex, none) center / cover, radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, .55) 100%); mix-blend-mode: soft-light; pointer-events: none; }
+.intro-card { position: relative; z-index: 1; background: radial-gradient(ellipse at 50% 38%, rgba(96, 58, 30, .75), rgba(26, 13, 6, .85) 78%); box-shadow: 0 0 5cqw rgba(255, 200, 120, .12), inset 0 0 3cqw rgba(0, 0, 0, .5); }
+.intro-card, #leader { animation: introWeave .125s steps(2) infinite; }
+@keyframes introSpin { to { transform: rotate(360deg); } }
+@keyframes introFlick { 0% { opacity: 1; } 25% { opacity: .82; } 50% { opacity: .95; } 75% { opacity: .88; } }
+@keyframes introWeave { 0% { translate: 0 0; } 50% { translate: .07cqw -.1cqw; } 100% { translate: -.05cqw .06cqw; } }
+@media (prefers-reduced-motion: reduce) { #intro::before, .intro-card, #leader { animation: none; } }
 .intro-card { text-align: center; padding: 3cqw 5cqw; border: .4cqw double var(--paper-edge); outline: .2cqw solid var(--paper-edge); outline-offset: .8cqw; }
 .intro-card .presents { margin: 0; font-size: 1.4cqw; letter-spacing: .3em; text-transform: uppercase; color: var(--paper-edge); }
 .intro-card h1 { margin: 1cqw 0; font-family: var(--display); font-weight: 400; font-size: 7cqw; line-height: 1; color: var(--marquee); text-shadow: .4cqw .4cqw 0 var(--red), .7cqw .7cqw 0 var(--ink); }
@@ -173,6 +270,20 @@ body { margin: 0; background: var(--night); color: var(--paper); font-family: va
 #leader::before { left: 50%; top: -20%; bottom: -20%; width: .2cqw; }
 #leader::after { top: 50%; left: -40%; right: -40%; height: .2cqw; }
 #leaderNum { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-size: 18cqw; color: var(--paper); text-shadow: .4cqw .4cqw 0 var(--ink); }
+/* the job title card: an old-film leader frame shown while the iris is shut */
+#jobCard { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; pointer-events: none; background: radial-gradient(ellipse at center, #3a2415, #0b0604 75%); opacity: 0; }
+#jobCard[hidden] { display: none; }
+#jobCard::before { content: ''; position: absolute; left: 50%; top: 50%; width: 34cqw; height: 34cqw; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, transparent 60%, rgba(255, 238, 200, .22) 60.5%, transparent 62%, transparent 76%, rgba(255, 238, 200, .22) 76.5%, transparent 78%); }
+#jobCard::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(180deg, transparent 0 2.2cqw, rgba(255, 238, 200, .16) 2.2cqw 3.6cqw) left / 2.2cqw 100% no-repeat, repeating-linear-gradient(180deg, transparent 0 2.2cqw, rgba(255, 238, 200, .16) 2.2cqw 3.6cqw) right / 2.2cqw 100% no-repeat; }
+#jobCard .jc { position: relative; text-align: center; padding: 2.4cqw 5cqw; border: .4cqw double var(--paper-edge); outline: .2cqw solid var(--paper-edge); outline-offset: .8cqw; background: rgba(20, 10, 5, .55); }
+#jobCard .jc-num { margin: 0; font-family: var(--type); font-size: 1.6cqw; letter-spacing: .35em; text-transform: uppercase; color: var(--paper-edge); }
+#jobCard .jc-name { margin: .8cqw 0 0; font-family: var(--display); font-weight: 400; font-size: 5.2cqw; line-height: 1; color: var(--marquee); text-shadow: .3cqw .3cqw 0 var(--red), .55cqw .55cqw 0 var(--ink); }
+#jobCard.in { animation: jcIn .16s steps(3) forwards, jcWeave .12s steps(2) infinite; }
+#jobCard.out { animation: jcOut .2s steps(3) forwards; }
+@keyframes jcIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes jcOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes jcWeave { 0% { transform: translate(0, 0); } 50% { transform: translate(.08cqw, -.12cqw); } 100% { transform: translate(-.06cqw, .05cqw); } }
+@media (prefers-reduced-motion: reduce) { #jobCard.in { animation: jcIn .16s steps(3) forwards; } }
 #intro.counting .intro-card { display: none; }
 #intro.counting #leader { display: block; }
 

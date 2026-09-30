@@ -1,10 +1,10 @@
 /* Circuit Panic! — offline support. Precaches the whole game so it plays with no
    connection; fonts are cached the first time they load. Bump VERSION to roll
    out an update. */
-const VERSION = 'cp-v1';
+const VERSION = 'cp-v9';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
-  'js/toon.js', 'js/audio.js', 'js/fx.js', 'js/circuit.js', 'js/app.js', 'js/menu.js', 'js/level.js',
+  'js/toon.js', 'js/audio.js', 'js/fx.js', 'js/gfx.js', 'js/circuit.js', 'js/app.js', 'js/menu.js', 'js/level.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
 ];
 
@@ -26,6 +26,8 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   const isFont = /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
   if (url.origin !== location.origin && !isFont) return;
+  /* the showcase gallery (playable snapshot copies) is never cached or served from here */
+  if (url.origin === location.origin && url.pathname.includes('/showcase/')) return;
   /* cache first, then refresh the cached copy in the background */
   e.respondWith(caches.open(VERSION).then(async cache => {
     const hit = await cache.match(req, { ignoreSearch: url.origin === location.origin });
