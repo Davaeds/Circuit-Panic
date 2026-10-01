@@ -249,6 +249,8 @@
     },
     ahh() { if (!ctx) return; tone(300, now(), 0.5, { type: 'sawtooth', vol: 0.07, bus: sfxBus, attack: 0.2, glide: 520, cutoff: 1200, vib: [5, 6] }); },
     beep() { if (!ctx) return; tone(2200, now(), 0.07, { type: 'square', vol: 0.06, bus: sfxBus, cutoff: 5000 }); },
+    /* a referee's pea whistle: a high, rattling trill */
+    whistle() { if (!ctx) return; const t = now(); tone(2700, t, 0.5, { type: 'square', vol: 0.045, bus: sfxBus, cutoff: 4400, vib: [34, 160] }); noise(t, 0.45, { type: 'bandpass', freq: 3300, q: 5, vol: 0.05, bus: sfxBus }); },
     clack() {
       if (!ctx) return; const t = now();
       for (let i = 0; i < 6; i++) noise(t + i * 0.07, 0.02, { type: 'bandpass', freq: 1800, q: 4, vol: 0.2, bus: sfxBus });

@@ -877,8 +877,33 @@
         const lever = el('g', {}, g);
         el('path', { d: 'M-6,0 L-8,-28 Q0,-35 8,-28 L6,0 Z', fill: 'url(#gPlate)', stroke: INK, 'stroke-width': 3.5, 'stroke-linejoin': 'round' }, lever);
         el('path', { d: 'M-3.5,-6 L-4.5,-25', stroke: '#fffdf4', 'stroke-width': 2.5, 'stroke-linecap': 'round' }, lever);
+        /* the 4-way: the referee between two arguing 3-ways. A striped band
+           across the top of his plate and a pea whistle on a cord, which comes
+           up to his mouth when he blows it (a big 'pop' in his pose) */
+        let whistle = null, cord = null;
+        if (opts.referee) {
+          const id = 'refClip' + uid++;
+          const cp = el('clipPath', { id }, scene.defs);
+          el('path', { d: 'M-42,-212 Q0,-224 42,-212 Q58,-206 56,-188 Q62,-110 52,-36 Q48,-16 30,-16 H-30 Q-48,-16 -52,-36 Q-62,-110 -56,-188 Q-58,-206 -42,-212 Z' }, cp);
+          const band = el('g', { 'clip-path': `url(#${id})` }, g);
+          for (let i = -6; i < 6; i++) el('rect', { x: i * 10, y: -226, width: 10, height: 28, fill: i % 2 ? '#1c1c1e' : '#f6f1e2' }, band);
+          el('path', { d: 'M-60,-198 H60', stroke: INK, 'stroke-width': 3 }, band);
+          cord = el('path', { fill: 'none', stroke: '#c7322b', 'stroke-width': 2.4, 'stroke-linecap': 'round' }, g);
+          whistle = el('g', {}, g);
+          el('path', { d: 'M-9,-6 H8 Q14,-6 14,0 Q14,8 5,8 Q-3,8 -4,2 H-9 Z', fill: 'url(#gSteel)', stroke: INK, 'stroke-width': 2.4, 'stroke-linejoin': 'round' }, whistle);
+          el('circle', { cx: 5, cy: 1, r: 2.4, fill: INK }, whistle);
+          el('path', { d: 'M-6,-3 H6', stroke: '#ffffff', 'stroke-width': 1.4, opacity: 0.8 }, whistle);
+        }
         return {
-          update(p) { const lv = clamp(p.lever, -1, 1); lever.setAttribute('transform', `translate(0,-110) scale(1,${R((lv < 0 ? lv * 0.62 : lv) * 100) / 100})`); },
+          update(p) {
+            const lv = clamp(p.lever, -1, 1); lever.setAttribute('transform', `translate(0,-110) scale(1,${R((lv < 0 ? lv * 0.62 : lv) * 100) / 100})`);
+            if (whistle) {
+              /* blowing: up at his mouth (on the plate below the toggle); otherwise it hangs */
+              const blow = clamp((p.pop - 0.4) / 0.5), wx = 26 - 26 * blow + p.turn * 4, wy = -46 - 4 * blow;
+              whistle.setAttribute('transform', `translate(${R(wx)},${R(wy)}) rotate(${R(-20 + 20 * blow)})`);
+              cord.setAttribute('d', `M-30,-150 Q${R(wx - 10)},${R(wy - 30)} ${R(wx - 8)},${R(wy - 3)}`);
+            }
+          },
         };
       },
     });
@@ -986,7 +1011,7 @@
       shoulders: [[-146, -262], [146, -262]], hips: [[-70, -4], [70, -4]],
       face: { x: 0, y: -292, spacing: 34, rx: 16, ry: 19, mouthY: 34, mouthW: 26, turnShift: 15, lidColor: '#b9bdb7', browW: 7.5, pop: 104, sweatOut: 96, maxOpen: 0.8, maxBrow: 1.1 },
       life: { breath: 4.8, bounce: 0, beatMul: 0.29, beatOffset: 0.2, sway: 0, lean: 0, nervous: 0.04 },
-      pose: { lhx: -16, lhy: 168, rhx: 16, rhy: 168, lbend: 0.18, rbend: 0.18, browTilt: -0.9, browRaise: 0, lid: 0.32, pupil: 0.8, mouthOpen: 0.08, knee: 0.05 },
+      pose: { lhx: -40, lhy: 196, rhx: 40, rhy: 196, lbend: 0.22, rbend: 0.22, browTilt: -0.9, browRaise: 0, lid: 0.32, pupil: 0.8, mouthOpen: 0.08, knee: 0.05 },
       disc: { lg: 'back', rg: 'back', mouth: 'flat' },
       draw(g) {
         /* the box's depth, down his right side */

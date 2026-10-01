@@ -202,6 +202,76 @@
       cable: ['A wire from one light straight to the other? Through what?', 'The only cables run from MY box out to each light. Everything comes home to me.', 'Rule: each 14/2 to a light carries that light\'s switched hot (black), its neutral (white) and a bare ground. Splices happen in a box, never in the air.'],
     },
   };
+  /* 1.8 Power at the Light: a 3-way where the feed comes in at the light. A
+     14/3 runs light to the first switch, another 14/3 on to the second. Only
+     three insulated conductors per cable, so somewhere a white has to carry a
+     hot (re-marked with tape: a traveler or a supply, never the leg back to
+     the light), and to current Code (NEC 404.2(C)) a switch box gets a neutral
+     (with several switches for the same lights, one box is enough). */
+  const LEVEL18 = {
+    id: 18, num: '1.8', screen: 'lvl18', store: 'circuitPanic.level18', name: 'Power at the Light', goal: 'threeway', par: 10, requireGround: true, colorCode: true,
+    stage: 'power', wide: true, taped: true, fuseX: 236, swHeads: ['Kitchen', 'Hall'],
+    form: 'Form 1-PL', next: 'lvl19', nextName: '1.9 The Long Hallway',
+    objective: 'Dining room, two doorways: the power comes in at the light this time. EITHER 3-way works the light. Wire it to current Code.',
+    components: [{ id: 'P', type: 'source' }, { id: 'S1', type: 'threeway' }, { id: 'S2', type: 'threeway' }, { id: 'L1', type: 'fixture' }, { id: 'K1', type: 'splice' }, { id: 'K2', type: 'splice' }],
+    switchNames: { S1: 'the kitchen switch', S2: 'the hall switch' },
+    boxes: { 'P.hot': 'FX', 'P.neu': 'FX', 'P.gnd': 'FX', 'L1.brass': 'FX', 'L1.silver': 'FX', 'L1.g': 'FX', 'S1.com': 'SB1', 'S1.t1': 'SB1', 'S1.t2': 'SB1', 'S1.g': 'SB1', 'K1.n': 'SB1', 'K2.n': 'SB1', 'S2.com': 'SB2', 'S2.t1': 'SB2', 'S2.t2': 'SB2', 'S2.g': 'SB2' },
+    boxNames: { FX: 'the light\'s box', SB1: 'the kitchen switch box', SB2: 'the hall switch box' },
+    cables: [{ id: 'A', a: 'FX', b: 'SB1', type: 'a 14/3', name: '14/3', conductors: ['black', 'red', 'white'] }, { id: 'B', a: 'SB1', b: 'SB2', type: 'a 14/3', name: '14/3', conductors: ['black', 'red', 'white'] }],
+    switchNeutral: ['SB1', 'SB2'],
+    names: {
+      'P.hot': 'the feed\'s BLACK (the power coming in)', 'P.neu': 'the feed\'s WHITE', 'P.gnd': 'the feed\'s bare GROUND',
+      'S1.com': 'the kitchen switch\'s dark COMMON screw', 'S1.t1': 'the kitchen switch\'s left traveler screw', 'S1.t2': 'the kitchen switch\'s right traveler screw', 'S1.g': 'the kitchen box\'s green GROUND screw',
+      'S2.com': 'the hall switch\'s dark COMMON screw', 'S2.t1': 'the hall switch\'s left traveler screw', 'S2.t2': 'the hall switch\'s right traveler screw', 'S2.g': 'the hall box\'s green GROUND screw',
+      'K1.n': 'the upper splice in the kitchen box', 'K2.n': 'the lower splice in the kitchen box',
+      'L1.brass': 'the light\'s BRASS screw', 'L1.silver': 'the light\'s SILVER screw', 'L1.g': 'the light box\'s green GROUND screw',
+    },
+    quips: {
+      S1: ['Oh, so HE gets a say too?!', 'Everybody comes in through the KITCHEN, pal.', 'Quit flipping MY light!', 'Fine. Two bosses. Again.'],
+      S2: ['Excuse me, I had that just how I liked it.', 'The HALL door is the front of the room, shorty.', 'Hmph. Apparently we share. Again.', 'Who asked YOU?'],
+    },
+    winText: 'Power in at the light; a 14/3 to each switch; the hot and the switched leg carried on black and red, the travelers with a white re-marked by tape (a traveler, never the leg back to the light); the white from the light capped in the kitchen box so a smart switch can go in some day; every box grounded. Either switch works it, from anywhere.',
+    punch: { fewest: 'No spare wire (ten will do)', colors: 'Right colours: a taped white only as a traveler or a supply, white neutral, green ground' },
+    intro: ['Power comes in up here at MY box again. And those two are back.', 'Clean board. They\'re still arguing.'],
+    hintSets: {
+      hot: ['The power\'s in MY box. Which switch does it go to first, and how?', 'The hot goes to one 3-way\'s dark COMMON. The other COMMON sends it back, switched, to my BRASS.', 'Rule: hot to one COMMON, travelers between the 3-ways, the far COMMON to the light\'s BRASS. Splice through a box when a cable doesn\'t reach.'],
+      cable: ['Count what\'s in each 14/3 before you use it.', 'Each 14/3 has a black, a red, a white and a bare. Some job will need that white as a hot.', 'Rule: a white used as a hot is taped. It may be a traveler or a supply to a switch, never the leg back to the light. One conductor per job per cable.'],
+      boxneutral: ['It works. Will it still work when somebody fits a smart switch?', 'A new switch box gets the neutral brought in and capped. With two switches for the same light, one box is enough.', 'Rule (NEC 404.2(C)): bring the white from the light into a switch box and cap it with a wire nut.'],
+      color: ['A white carrying a hot... how would the next electrician know?', 'Re-mark it: black tape, the taped-white wire on your bench.', 'Rule: a taped white may be a traveler or a supply to a switch, never the switched leg back to the light.'],
+    },
+  };
+  /* 1.9 The Long Hallway (Chapter 1 capstone): one light from THREE places,
+     a 4-way between two 3-ways. The 4-way takes one 3-way's two travelers on
+     one pair of screws and hands them on from the other pair, straight
+     through or crossed over, so any flip of any switch changes the light
+     (circuit.js 'multiway', every one of the 8 positions tested). The 4-way
+     is the referee between the two arguing 3-ways. */
+  const LEVEL19 = {
+    id: 19, num: '1.9', screen: 'lvl19', store: 'circuitPanic.level19', name: 'The Long Hallway', goal: 'multiway', par: 11, requireGround: true, colorCode: true,
+    stage: 'hall', wide: true, taped: true, fuseX: 236, mediator: true, swHeads: ['West', 'Middle', 'East'],
+    form: 'Form 1-4W', next: null, nextName: '',
+    objective: 'The long hallway: one light, THREE switches. Any switch, from any position, turns the light on or off. Ground every box.',
+    components: [{ id: 'P', type: 'source' }, { id: 'S1', type: 'threeway' }, { id: 'S2', type: 'fourway' }, { id: 'S3', type: 'threeway' }, { id: 'L1', type: 'fixture' }],
+    switchNames: { S1: 'the west switch', S2: 'the middle switch', S3: 'the east switch' },
+    names: {
+      'P.hot': 'the panel HOT', 'P.neu': 'the panel NEUTRAL bar', 'P.gnd': 'the panel GROUND bar',
+      'S1.com': 'the west switch\'s dark COMMON screw', 'S1.t1': 'the west switch\'s left traveler screw', 'S1.t2': 'the west switch\'s right traveler screw', 'S1.g': 'the west box\'s green GROUND screw',
+      'S2.i1': 'the 4-way\'s top left traveler screw (brass pair)', 'S2.i2': 'the 4-way\'s top right traveler screw (brass pair)', 'S2.o1': 'the 4-way\'s bottom left traveler screw (dark pair)', 'S2.o2': 'the 4-way\'s bottom right traveler screw (dark pair)', 'S2.g': 'the middle box\'s green GROUND screw',
+      'S3.com': 'the east switch\'s dark COMMON screw', 'S3.t1': 'the east switch\'s left traveler screw', 'S3.t2': 'the east switch\'s right traveler screw', 'S3.g': 'the east box\'s green GROUND screw',
+      'L1.brass': 'the hall light\'s BRASS screw', 'L1.silver': 'the hall light\'s SILVER screw', 'L1.g': 'the light box\'s green GROUND screw',
+    },
+    quips: {
+      S1: ['Oh, NOW there\'s three of us?!', 'West end. Where the hall STARTS, pal.', 'Quit flipping MY light!', 'Fine. Three bosses. Wonderful.'],
+      S3: ['Excuse me. I had that just how I liked it.', 'The EAST end is the important end.', 'Hmph. Apparently we share. All of us.', 'Who asked YOU?'],
+    },
+    winText: 'Hot to one 3-way\'s COMMON; its two travelers to one PAIR on the 4-way; the 4-way\'s other pair on to the far 3-way; that COMMON to the light\'s BRASS; the neutral straight to SILVER; every box grounded. The 4-way passes the travelers straight or crosses them, so ANY flip changes the light. Add more 4-ways and you can switch a hall from as many places as you like. That\'s Chapter 1.',
+    punch: { fewest: 'No spare wire (eleven will do)', colors: 'Right colours: white neutral, green ground, hot never white (unless taped) or green' },
+    intro: ['THREE switches?! Oh, this is going to be LOUD.', 'Clean board. All three of them are back.'],
+    hintSets: {
+      threeway: ['Flip each switch from every position. Which flip does nothing?', '3-ways at the ENDS (dark COMMON, two brass travelers); the 4-way goes IN BETWEEN, on the travelers.', 'Rule: hot to one 3-way\'s COMMON, its travelers to one pair of the 4-way, the 4-way\'s other pair to the far 3-way\'s travelers, the far COMMON to the light\'s BRASS.'],
+      hot: ['Where does the hot go first?', 'The hot lands on an END switch\'s dark COMMON, never on the 4-way.', 'Rule: panel HOT to a 3-way\'s COMMON. The 4-way only ever carries travelers.'],
+    },
+  };
   const LEVEL1 = {
     id: 1, num: '1.3', screen: 'level', store: 'circuitPanic.level1', name: 'Flip the Switch', goal: 'switch', par: 4, requireGround: true,
     form: 'Form 1-SP', next: 'lvl14', nextName: '1.4 Switch Loop', plate: 'PRACTICE BOARD No. 1',
@@ -224,7 +294,7 @@
   };
   const LEVEL2 = {
     id: 2, num: '1.7', screen: 'level2', store: 'circuitPanic.level2', name: 'Stairway Lights', goal: 'threeway', par: 8, requireGround: true, wide: true, swap: true, bonus: true, taped: true,
-    form: 'Form 2-3W',
+    form: 'Form 2-3W', next: 'lvl18', nextName: '1.8 Power at the Light',
     objective: 'Wire the stair light so EITHER 3-way switch turns it on and off. Ground both switch boxes and the fixture box.',
     components: [{ id: 'P', type: 'source' }, { id: 'S1', type: 'threeway' }, { id: 'S2', type: 'threeway' }, { id: 'L1', type: 'fixture' }],
     switchNames: { S1: 'the bottom switch', S2: 'the top switch' },
@@ -517,7 +587,7 @@
   };
   let TERMS, PIG_AT, SWDEF, BULB, BULB2 = null, OUTLET = null, CHAIN_AT = null, REC = null;
   /* the later Chapter 1 boards, by LEVEL.stage */
-  const STAGES = { loop: stageLoop, two: stageTwo, sparky: stageSparky };
+  const STAGES = { loop: stageLoop, two: stageTwo, sparky: stageSparky, power: stagePower, hall: stageHall };
   let SPARKY = null;
   if (ID === 2) stage2();
   else if (LEVEL.toolbox) stageLight();
@@ -889,42 +959,132 @@
      coming into his left side, both switches standing in his gangs and the
      splices in his open belly; a 14/2 runs from him to each light */
   function stageSparky() {
-    const SXC = 535;
+    /* (he stands right of centre: the job card on the HUD covers the top left) */
+    const SXC = 640;
     SPARKY = { x: SXC, y: 590, s: 1 };
     /* what shows through his openings: the inside of a steel box */
     const inside = el('g', {}, L.parts);
     el('rect', { x: SXC - 146, y: 280, width: 292, height: 228, rx: 8, fill: 'url(#gCabIn)', stroke: INK, 'stroke-width': 3 }, inside);
     el('path', { d: `M${SXC - 140},290 H${SXC + 140}`, stroke: '#000', 'stroke-width': 8, opacity: 0.3 }, inside);
-    for (const [kx, ky] of [[SXC - 100, 360], [SXC, 360], [SXC + 100, 360], [SXC - 40, 470], [SXC + 60, 470]]) { el('circle', { cx: kx, cy: ky, r: 13, fill: 'none', stroke: '#55595c', 'stroke-width': 2.4 }, inside); el('circle', { cx: kx, cy: ky, r: 7, fill: 'none', stroke: '#55595c', 'stroke-width': 2 }, inside); }
+    for (const [kx, ky] of [[SXC - 100, 360], [SXC, 360], [SXC + 100, 360]]) { el('circle', { cx: kx, cy: ky, r: 13, fill: 'none', stroke: '#55595c', 'stroke-width': 2.4 }, inside); el('circle', { cx: kx, cy: ky, r: 7, fill: 'none', stroke: '#55595c', 'stroke-width': 2 }, inside); }
     /* the green screw's welded tab in his belly */
-    el('path', { d: `M${SXC + 86},468 H${SXC + 124} V498 H${SXC + 86} Z`, fill: 'url(#gGalv)', stroke: INK, 'stroke-width': 2.6 }, inside);
-    const a = octLight(800, 300, 0.7), b = octLight(1030, 300, 0.7);
-    /* the feed, down the left edge of the board into his side */
-    nmCable(`M312,196 C350,196 372,204 372,244 V440 Q372,478 ${SXC - 150},478`, [[372, 300, 90], [372, 400, 90]], { clamps: [[SXC - 146, 478, 90]], tag: [430, 160, 'FEED  14/2', -1.5] });
+    el('path', { d: `M${SXC + 104},468 H${SXC + 134} V498 H${SXC + 104} Z`, fill: 'url(#gGalv)', stroke: INK, 'stroke-width': 2.6 }, inside);
+    const a = octLight(905, 300, 0.62), b = octLight(1058, 300, 0.62);
+    /* the feed, down the left edge of the board and along into his side */
+    nmCable(`M312,196 C350,196 372,204 372,244 V440 Q372,478 410,478 H${SXC - 150}`, [[372, 300, 90], [372, 400, 90], [440, 478, 0]], { clamps: [[SXC - 146, 478, 90]], tag: [420, 160, 'FEED  14/2', -1.5] });
     /* a 14/2 out of his right side to each light */
-    nmCable(`M${SXC + 150},330 C${SXC + 178},330 704,364 ${800 - 72},364`, [], { clamps: [[SXC + 147, 330, 90], [800 - 70, 364, 90]], tag: [660, 252, '14/2', 2] });
-    nmCable(`M${SXC + 150},470 C760,476 900,486 980,476 C1010,472 1030,454 1030,${R(b.OC + 74)}`, [[820, 480, 6], [930, 482, -4]], { clamps: [[SXC + 147, 470, 90], [1030, R(b.OC + 72), 0]], tag: [880, 508, '14/2', -1.5] });
+    nmCable(`M${SXC + 150},330 C${SXC + 170},330 820,356 ${905 - 64},356`, [], { clamps: [[SXC + 147, 330, 90], [905 - 62, 356, 90]] });
+    nmCable(`M${SXC + 150},470 C860,476 940,486 1000,478 C1036,472 1058,452 1058,${R(b.OC + 66)}`, [[880, 481, 4], [980, 480, -4]], { clamps: [[SXC + 147, 470, 90], [1058, R(b.OC + 64), 0]], tag: [930, 508, '14/2', -1.5] });
+    /* the feed's conductors come out of the clamp in his belly, spread out to be spliced */
     const cl = [SXC - 132, 478];
     TERMS = {
-      'P.hot': { x: SXC - 88, y: 468, kind: 'tail', wire: 'black', from: cl, bend: 0.2, nut: true, name: 'Feed black (power in)' },
-      'P.neu': { x: SXC - 50, y: 488, kind: 'tail', wire: 'white', from: [cl[0] + 2, cl[1] + 4], bend: -0.15, nut: true, name: 'Feed white' },
-      'P.gnd': { x: SXC - 12, y: 470, kind: 'tail', wire: 'bare', from: [cl[0] + 4, cl[1] + 8], bend: 0.12, nut: true, name: 'Feed bare ground' },
-      'J.g': { x: SXC + 105, y: 483, kind: 'green', label: 'GROUND', tx: SXC + 104, ty: 532, name: 'Sparky\'s green GROUND screw' },
-      'S1.a': { x: SXC - 121, y: 318, kind: 'brass', label: 'BRASS', tx: 350, ty: 318, name: 'Left switch top BRASS' },
-      'S1.b': { x: SXC - 121, y: 404, kind: 'brass', label: 'BRASS', tx: 350, ty: 404, name: 'Left switch bottom BRASS' },
-      'S2.a': { x: SXC + 121, y: 318, kind: 'brass', label: 'BRASS', tx: SXC + 190, ty: 300, name: 'Right switch top BRASS' },
-      'S2.b': { x: SXC + 121, y: 404, kind: 'brass', label: 'BRASS', tx: SXC + 190, ty: 420, name: 'Right switch bottom BRASS' },
-      'L1.brass': { x: a.brass[0], y: a.brass[1], kind: 'brass', label: 'BRASS', tx: a.brass[0] - 52, ty: a.brass[1] - 30, name: 'First light BRASS' },
-      'L1.silver': { x: a.silver[0], y: a.silver[1], kind: 'silver', label: 'SILVER', tx: a.silver[0] + 46, ty: a.silver[1] - 18, name: 'First light SILVER' },
-      'L1.g': { x: a.g[0], y: a.g[1], kind: 'green', label: 'GROUND', tx: a.g[0], ty: a.g[1] + 48, name: 'First light box green GROUND' },
-      'L2.brass': { x: b.brass[0], y: b.brass[1], kind: 'brass', label: 'BRASS', tx: b.brass[0] - 30, ty: b.brass[1] - 48, name: 'Second light BRASS' },
-      'L2.silver': { x: b.silver[0], y: b.silver[1], kind: 'silver', label: 'SILVER', tx: b.silver[0] + 4, ty: b.silver[1] - 48, name: 'Second light SILVER' },
-      'L2.g': { x: b.g[0], y: b.g[1], kind: 'green', label: 'GROUND', tx: b.g[0] + 60, ty: b.g[1] + 40, name: 'Second light box green GROUND' },
+      'P.hot': { x: SXC - 92, y: 466, kind: 'tail', wire: 'black', from: cl, bend: 0.2, nut: true, name: 'Feed black (power in)' },
+      'P.neu': { x: SXC - 38, y: 488, kind: 'tail', wire: 'white', from: [cl[0] + 2, cl[1] + 4], bend: -0.12, nut: true, name: 'Feed white' },
+      'P.gnd': { x: SXC + 16, y: 470, kind: 'tail', wire: 'bare', from: [cl[0] + 4, cl[1] + 8], bend: 0.1, nut: true, name: 'Feed bare ground' },
+      'J.g': { x: SXC + 119, y: 483, kind: 'green', label: 'GROUND', tx: SXC + 118, ty: 534, name: 'Sparky\'s green GROUND screw' },
+      /* (the four brass screws in his gangs go unlabelled: it keeps his face clear) */
+      'S1.a': { x: SXC - 121, y: 318, kind: 'brass', name: 'Left switch top BRASS' },
+      'S1.b': { x: SXC - 121, y: 404, kind: 'brass', name: 'Left switch bottom BRASS' },
+      'S2.a': { x: SXC + 121, y: 318, kind: 'brass', name: 'Right switch top BRASS' },
+      'S2.b': { x: SXC + 121, y: 404, kind: 'brass', name: 'Right switch bottom BRASS' },
+      'L1.brass': { x: a.brass[0], y: a.brass[1], kind: 'brass', label: 'BRASS', tx: a.brass[0] - 18, ty: a.brass[1] - 52, name: 'First light BRASS' },
+      'L1.silver': { x: a.silver[0], y: a.silver[1], kind: 'silver', label: 'SILVER', tx: a.silver[0] - 6, ty: a.silver[1] + 112, name: 'First light SILVER' },
+      'L1.g': { x: a.g[0], y: a.g[1], kind: 'green', label: 'GROUND', tx: a.g[0] - 2, ty: a.g[1] + 46, name: 'First light box green GROUND' },
+      'L2.brass': { x: b.brass[0], y: b.brass[1], kind: 'brass', label: 'BRASS', tx: b.brass[0] - 14, ty: b.brass[1] - 60, name: 'Second light BRASS' },
+      'L2.silver': { x: b.silver[0], y: b.silver[1], kind: 'silver', label: 'SILVER', tx: b.silver[0] - 18, ty: b.silver[1] + 112, name: 'Second light SILVER' },
+      'L2.g': { x: b.g[0], y: b.g[1], kind: 'green', label: 'GROUND', tx: b.g[0] + 2, ty: b.g[1] + 56, name: 'Second light box green GROUND' },
     };
-    PIG_AT = { 'J.g': [-0.98, 0.1], 'S1.a': [0.5, 0.85], 'S1.b': [0.5, 0.85], 'S2.a': [-0.5, 0.85], 'S2.b': [-0.5, 0.85], 'L1.brass': [-0.8, 0.6], 'L1.silver': [0.8, 0.6], 'L1.g': [-0.8, 0.6], 'L2.brass': [-0.8, 0.6], 'L2.silver': [0.8, 0.6], 'L2.g': [0.8, 0.6] };
+    PIG_AT = { 'J.g': [-1, 0], 'S1.a': [0.5, 0.85], 'S1.b': [0.5, 0.85], 'S2.a': [-0.5, 0.85], 'S2.b': [-0.5, 0.85], 'L1.brass': [-0.75, -0.65], 'L1.silver': [0.3, 0.95], 'L1.g': [-0.8, 0.6], 'L2.brass': [0.2, -1], 'L2.silver': [0.6, 0.8], 'L2.g': [0.8, 0.6] };
     SWDEF = [{ id: 'S1', x: SXC - 66, y: 436, s: 0.48, labels: false, tip: [SXC - 80, 330] }, { id: 'S2', x: SXC + 66, y: 436, s: 0.48, labels: false, tip: [SXC + 52, 330] }];
-    BULB = { x: 800, y: 298, s: 0.58, tip: [758, 170] };
-    BULB2 = { x: 1030, y: 298, s: 0.58, tip: [988, 170] };
+    BULB = { x: 905, y: 298, s: 0.52, tip: [868, 186] };
+    BULB2 = { x: 1058, y: 298, s: 0.52, tip: [1021, 186] };
+  }
+  /* 1.8: power at the light. The dining-room light on the left, the feed
+     coming into its box; a 14/3 over to the kitchen 3-way, another on to the
+     hall 3-way. The kitchen box has room for two splices beside the switch */
+  function stagePower() {
+    const FX = 560, a = octLight(FX, 300, 0.7);
+    const S1X = 880, S2X = 1170;
+    deviceBox(S1X, 290, 112, 216, [[S1X - 98, S1X - 50, 336], [S1X + 50, S1X + 98, 336], [S1X - 98, S1X - 50, 426], [S1X + 50, S1X + 98, 426], [S1X + 50, S1X + 98, 490]], [S1X - 72, 510]);
+    deviceBox(S2X, 290, 112, 216, [[S2X - 98, S2X - 50, 336], [S2X + 50, S2X + 98, 336], [S2X - 98, S2X - 50, 426]], [S2X + 72, 510]);
+    /* the feed, out of the panel and into the light's box */
+    nmCable(`M312,196 C380,196 404,232 410,290 C414,340 436,${R(a.OC + 12)} ${FX - 78},${R(a.OC + 12)}`, [[404, 220, 60], [414, 320, 90]], { clamps: [[316, 196, 90], [FX - 76, R(a.OC + 12), 90]], tag: [440, 160, 'FEED  14/2', -1.5] });
+    /* light to kitchen, kitchen to hall: 14/3 */
+    nmCable(`M${FX + 78},${R(a.OC + 12)} C700,${R(a.OC + 8)} 740,250 800,248 C842,247 ${S1X - 14},256 ${S1X - 14},278`, [[740, 290, 50]], { clamps: [[FX + 76, R(a.OC + 12), -90], [S1X - 14, 280, 0]], tag: [720, 214, '14/3', -2] });
+    nmCable(`M${S1X + 14},278 C${S1X + 14},236 960,226 1030,226 C1110,226 ${S2X},236 ${S2X},278`, [[1030, 226, 0]], { clamps: [[S1X + 14, 280, 0], [S2X, 280, 0]], tag: [1030, 196, '14/3', 1.5] });
+    const cl = [FX + 18, R(a.OC + 40)];
+    TERMS = {
+      'P.hot': { x: FX - 46, y: 470, kind: 'tail', wire: 'black', from: cl, bend: -0.2, nut: true, name: 'Feed black (power in)' },
+      'P.neu': { x: FX + 6, y: 492, kind: 'tail', wire: 'white', from: [cl[0] + 3, cl[1] + 3], bend: 0.12, nut: true, name: 'Feed white' },
+      'P.gnd': { x: FX + 58, y: 470, kind: 'tail', wire: 'bare', from: [cl[0] + 6, cl[1] + 6], bend: 0.2, nut: true, name: 'Feed bare ground' },
+      'L1.brass': { x: a.brass[0], y: a.brass[1], kind: 'brass', label: 'BRASS', tx: a.brass[0] - 30, ty: a.brass[1] - 50, name: 'Light BRASS' },
+      'L1.silver': { x: a.silver[0], y: a.silver[1], kind: 'silver', label: 'SILVER', tx: a.silver[0] + 66, ty: a.silver[1] - 22, name: 'Light SILVER' },
+      'L1.g': { x: a.g[0], y: a.g[1], kind: 'green', label: 'GROUND', tx: a.g[0] - 72, ty: a.g[1] + 20, name: 'Light box green GROUND' },
+      'S1.t1': { x: S1X - 80, y: 336, kind: 'brass', label: 'TRAVELER', tx: S1X - 92, ty: 298, name: 'Kitchen switch left traveler, brass' },
+      'S1.t2': { x: S1X + 80, y: 336, kind: 'brass', label: 'TRAVELER', tx: S1X + 96, ty: 298, name: 'Kitchen switch right traveler, brass' },
+      'S1.com': { x: S1X - 80, y: 426, kind: 'dark', label: 'COMMON', tx: S1X - 96, ty: 464, name: 'Kitchen switch COMMON, dark screw' },
+      'S1.g': { x: S1X - 66, y: 511, kind: 'green', label: 'GROUND', tx: S1X - 140, ty: 530, name: 'Kitchen box green GROUND' },
+      'K1.n': { x: S1X + 80, y: 426, kind: 'splice', nut: true, label: 'SPLICE', tx: S1X + 150, ty: 420, name: 'Kitchen box splice' },
+      'K2.n': { x: S1X + 80, y: 490, kind: 'splice', nut: true, label: 'SPLICE', tx: S1X + 150, ty: 500, name: 'Kitchen box splice' },
+      'S2.t1': { x: S2X - 80, y: 336, kind: 'brass', label: 'TRAVELER', tx: S2X - 92, ty: 298, name: 'Hall switch left traveler, brass' },
+      'S2.t2': { x: S2X + 80, y: 336, kind: 'brass', label: 'TRAVELER', tx: S2X + 86, ty: 380, name: 'Hall switch right traveler, brass' },
+      'S2.com': { x: S2X - 80, y: 426, kind: 'dark', label: 'COMMON', tx: S2X - 96, ty: 464, name: 'Hall switch COMMON, dark screw' },
+      'S2.g': { x: S2X + 78, y: 511, kind: 'green', label: 'GROUND', tx: S2X + 70, ty: 548, name: 'Hall box green GROUND' },
+    };
+    PIG_AT = {
+      'L1.brass': [-0.8, 0.6], 'L1.silver': [0.85, 0.5], 'L1.g': [-0.7, 0.7],
+      'S1.t1': [-0.3, -1], 'S1.t2': [0.4, -0.95], 'S1.com': [-0.6, 0.85], 'S1.g': [-0.95, -0.2],
+      'S2.t1': [-0.3, -1], 'S2.t2': [0.4, -0.95], 'S2.com': [-0.6, 0.85], 'S2.g': [-0.6, 0.85],
+    };
+    SWDEF = [{ id: 'S1', x: S1X, y: 494, s: 0.6, labels: false, tip: [S1X - 14, 346] }, { id: 'S2', x: S2X, y: 494, s: 0.6, labels: false, tip: [S2X - 14, 346] }];
+    BULB = { x: FX, y: 298, s: 0.56, tip: [FX - 42, 184] };
+    el('text', { x: 1030, y: 158, 'text-anchor': 'middle', 'font-family': 'Rye, Georgia, serif', 'font-size': 17, 'letter-spacing': 3, fill: '#7d4f24', opacity: 0.6 }, L.board).textContent = 'PRACTICE BOARD No. 8';
+    el('text', { x: 720, y: 520, 'text-anchor': 'middle', 'font-family': 'Special Elite, monospace', 'font-size': 13, 'letter-spacing': 3, fill: '#7d4f24', opacity: 0.6 }, L.board).textContent = 'THE DINING ROOM';
+  }
+  /* 1.9: the long hallway. West 3-way, the hall light, the 4-way referee in
+     the middle, the east 3-way; the power comes from the panel like 1.7 */
+  function stageHall() {
+    const S1X = 470, FX = 676, S2X = 880, S3X = 1160;
+    /* the hall, painted on the plywood: a runner down the floor and the plate */
+    el('path', { d: `M${BD.x0 + 16},526 H${BD.x1 - 16}`, stroke: '#a3261c', 'stroke-width': 9, opacity: 0.22 }, L.board);
+    el('path', { d: `M${BD.x0 + 16},526 H${BD.x1 - 16}`, stroke: '#f6ecd2', 'stroke-width': 2, opacity: 0.4, 'stroke-dasharray': '14 10' }, L.board);
+    el('text', { x: 1020, y: 160, 'text-anchor': 'middle', 'font-family': 'Rye, Georgia, serif', 'font-size': 18, 'letter-spacing': 3, fill: '#7d4f24', opacity: 0.6 }, L.board).textContent = 'PRACTICE BOARD No. 9';
+    el('text', { x: 1020, y: 184, 'text-anchor': 'middle', 'font-family': 'Special Elite, monospace', 'font-size': 14, 'letter-spacing': 4, fill: '#7d4f24', opacity: 0.6 }, L.board).textContent = 'THE LONG HALLWAY';
+    deviceBox(S1X, 290, 112, 216, [[S1X - 98, S1X - 50, 336], [S1X + 50, S1X + 98, 336], [S1X - 98, S1X - 50, 426]], [S1X + 72, 510]);
+    deviceBox(S2X, 290, 112, 216, [[S2X - 98, S2X - 50, 336], [S2X + 50, S2X + 98, 336], [S2X - 98, S2X - 50, 426], [S2X + 50, S2X + 98, 426]], [S2X + 72, 510]);
+    deviceBox(S3X, 290, 112, 216, [[S3X - 98, S3X - 50, 336], [S3X + 50, S3X + 98, 336], [S3X - 98, S3X - 50, 426]], [S3X + 72, 510]);
+    const a = octLight(FX, 300, 0.66);
+    tag(S1X, 262, 'WEST END', -1.5); tag(S2X, 262, '4-WAY', 1); tag(S3X, 262, 'EAST END', 1.5);
+    const sw3 = (id, cx, who) => ({
+      [id + '.t1']: { x: cx - 80, y: 336, kind: 'brass', label: 'TRAVELER', tx: cx - 86, ty: 298, name: `${who} left traveler, brass` },
+      [id + '.t2']: { x: cx + 80, y: 336, kind: 'brass', label: 'TRAVELER', tx: cx + 90, ty: 298, name: `${who} right traveler, brass` },
+      [id + '.com']: { x: cx - 80, y: 426, kind: 'dark', label: 'COMMON', tx: cx - 88, ty: 464, name: `${who} COMMON, dark screw` },
+      [id + '.g']: { x: cx + 78, y: 511, kind: 'green', label: 'GROUND', tx: cx + 64, ty: 548, name: `${who} box green GROUND` },
+    });
+    TERMS = Object.assign({}, PANEL_TERMS, sw3('S1', S1X, 'West switch'), sw3('S3', S3X, 'East switch'), {
+      /* the 4-way: a brass pair on top, a dark pair below */
+      'S2.i1': { x: S2X - 80, y: 336, kind: 'brass', label: 'TRAVELER', tx: S2X - 86, ty: 298, name: '4-way top left traveler, brass pair' },
+      'S2.i2': { x: S2X + 80, y: 336, kind: 'brass', label: 'TRAVELER', tx: S2X + 90, ty: 298, name: '4-way top right traveler, brass pair' },
+      'S2.o1': { x: S2X - 80, y: 426, kind: 'dark', label: 'TRAVELER', tx: S2X - 88, ty: 464, name: '4-way bottom left traveler, dark pair' },
+      'S2.o2': { x: S2X + 80, y: 426, kind: 'dark', label: 'TRAVELER', tx: S2X + 92, ty: 464, name: '4-way bottom right traveler, dark pair' },
+      'S2.g': { x: S2X + 78, y: 511, kind: 'green', label: 'GROUND', tx: S2X + 64, ty: 548, name: 'Middle box green GROUND' },
+      'L1.brass': { x: a.brass[0], y: a.brass[1], kind: 'brass', label: 'BRASS', tx: a.brass[0] - 14, ty: a.brass[1] + 132, name: 'Hall light BRASS' },
+      'L1.silver': { x: a.silver[0], y: a.silver[1], kind: 'silver', label: 'SILVER', tx: a.silver[0] + 2, ty: a.silver[1] + 186, name: 'Hall light SILVER' },
+      'L1.g': { x: a.g[0], y: a.g[1], kind: 'green', label: 'GROUND', tx: a.g[0] + 14, ty: a.g[1] + 77, name: 'Hall light box green GROUND' },
+    });
+    PIG_AT = {
+      'P.hot': [0.95, 0.55], 'P.neu': [0.95, 0.3], 'P.gnd': [0.95, 0.35],
+      'S1.t1': [-0.3, -1], 'S1.t2': [0.5, -0.9], 'S1.com': [-0.6, 0.85], 'S1.g': [0.9, 0.2],
+      'S2.i1': [-0.3, -1], 'S2.i2': [0.3, -1], 'S2.o1': [-0.6, 0.85], 'S2.o2': [0.6, 0.85], 'S2.g': [-0.9, 0.2],
+      'S3.t1': [-0.3, -1], 'S3.t2': [0.3, -1], 'S3.com': [-0.6, 0.85], 'S3.g': [-0.9, 0.2],
+      'L1.brass': [-0.75, -0.65], 'L1.silver': [0.75, -0.65], 'L1.g': [-0.6, 0.8],
+    };
+    SWDEF = [
+      { id: 'S1', x: S1X, y: 494, s: 0.6, labels: false, tip: [S1X - 14, 346] },
+      { id: 'S2', x: S2X, y: 494, s: 0.6, labels: false, referee: true, tip: [S2X - 14, 346] },
+      { id: 'S3', x: S3X, y: 494, s: 0.6, labels: false, tip: [S3X - 14, 346] },
+    ];
+    BULB = { x: FX, y: 298, s: 0.52, tip: [FX - 40, 186] };
   }
   const fillOf = { brass: 'url(#gScrewBrass)', silver: 'url(#gScrewSilver)', dark: 'url(#gScrewDark)', green: 'url(#gScrewGreen)' };
   for (const [id, tm] of Object.entries(TERMS)) {
@@ -969,8 +1129,19 @@
   const leverOf = (id, s) => (swType(id) === 'sp' ? (s ? 1 : -1) : (s ? -1 : 1));
   /* 1.6: Sparky Junction goes on first, so the switches stand in front of him */
   const sparky = SPARKY ? T.makeJunction(scene, SPARKY.x, SPARKY.y, SPARKY.s) : null;
-  if (sparky) sparky.root.setAttribute('class', 'toon clicky');
-  const SWS = SWDEF.map(d => Object.assign({ toon: T.makeSwitch(scene, d.x, d.y, d.s, { labels: d.labels, pose: { lever: leverOf(d.id, 0) } }) }, d));
+  if (sparky) {
+    /* his box is full of things to work on: the pointer goes straight through
+       him to the screws, wires and nuts, except on his face plate */
+    sparky.root.setAttribute('class', 'toon clicky');
+    sparky.root.style.pointerEvents = 'none';
+    el('rect', { x: -126, y: -330, width: 252, height: 84, fill: 'transparent', 'pointer-events': 'all' }, sparky.bodyG);
+  }
+  const SWS = SWDEF.map(d => Object.assign({ toon: T.makeSwitch(scene, d.x, d.y, d.s, { labels: d.labels, referee: d.referee, pose: { lever: leverOf(d.id, 0) } }) }, d));
+  /* 1.9: the 4-way in the middle referees the two 3-ways; everywhere else the
+     first two switches are the arguing pair */
+  const REF = LEVEL.mediator ? SWS.find(s => s.referee) : null;
+  const ARGUERS = SWS.filter(s => s !== REF).slice(0, 2);
+  if (ARGUERS.length === 2) { ARGUERS[0].rival = ARGUERS[1]; ARGUERS[1].rival = ARGUERS[0]; }
   const swT = id => (SWS.find(s => s.id === id) || SWS[0]).toon;
   const sw = SWS[0] ? SWS[0].toon : null;
   /* 1.1: the outlet from the menu, standing in his box on CKT 2 */
@@ -1014,10 +1185,15 @@
      jittery little upstart; the one at the head is slow, stiff and superior */
   Object.assign(bulb.cfg.life, { breath: 3.6, bounce: 3, beatMul: 0.41, beatOffset: 0.3, sway: 2, lean: 3.2, nervous: 0.34 });
   if (sw) Object.assign(sw.cfg.life, { breath: 2.2, bounce: 4, beatMul: 0.87, beatOffset: 0.15, sway: 2.4, lean: 2.2, nervous: 0.26 });
-  if (SWS[1]) {
-    Object.assign(SWS[0].toon.cfg.life, { breath: 1.7, bounce: 5, beatMul: 1.19, beatOffset: 0.6, sway: 3.2, lean: 2.6, nervous: 0.42 });
-    Object.assign(SWS[1].toon.cfg.life, { breath: 3.9, bounce: 2, beatMul: 0.53, beatOffset: 0.05, sway: 1.4, lean: 1.2, nervous: 0.12 });
-    Object.assign(SWS[1].toon.base, { browTilt: -0.2, browRaise: 0.1, lid: 0.42, pupil: 0.8 });
+  if (ARGUERS.length === 2) {
+    Object.assign(ARGUERS[0].toon.cfg.life, { breath: 1.7, bounce: 5, beatMul: 1.19, beatOffset: 0.6, sway: 3.2, lean: 2.6, nervous: 0.42 });
+    Object.assign(ARGUERS[1].toon.cfg.life, { breath: 3.9, bounce: 2, beatMul: 0.53, beatOffset: 0.05, sway: 1.4, lean: 1.2, nervous: 0.12 });
+    Object.assign(ARGUERS[1].toon.base, { browTilt: -0.2, browRaise: 0.1, lid: 0.42, pupil: 0.8 });
+  }
+  /* the referee: unhurried, patient, eyes half shut, on his own slow count */
+  if (REF) {
+    Object.assign(REF.toon.cfg.life, { breath: 5.2, bounce: 1.5, beatMul: 0.37, beatOffset: 0.9, sway: 1, lean: 0.8, nervous: 0.05 });
+    Object.assign(REF.toon.base, { browTilt: -0.4, browRaise: 0.35, lid: 0.5, pupil: 0.85, mouthOpen: 0.12 });
   }
   /* Level 2's heckler: the old glass fuse from the menu, retired to the bench
      under the panel, who remembers when HE was the one who stopped the fire */
@@ -1536,6 +1712,7 @@
       particles.bonk(pg.J[0], pg.J[1] - 12, 0.8);
       A.sfx.pop();
       if (hisBox) { const m = SPK.nod(); sparky.play(m.k, m.d, { slot: 'small' }); once('sparkyNut', () => setTimeout(() => say('Clockwise. Like a gentleman.', 2.6, 'sparky'), 400)); }
+      hideTwist();
       const r = pg.res; pg.res = null; r(true);
     }
   }
@@ -1543,10 +1720,10 @@
     return new Promise(res => {
       const pg = pig[id];
       pg.res = res;
-      if (TERMS[id].nut) once('splice', () => say('Splices get a wire nut. Twist it on: click it three times!', 5, talker(id)));
-      else once('pigtail', () => say('Two wires on one screw? On the job you pigtail them. Twist the wire nut on: click it three times!', 7, talker(id)));
-      status('Twist the wire nut on: click it (or press Enter) three times, clockwise.');
-      try { pg.nut.focus({ preventScroll: true }); } catch (e) { /* no focus */ }
+      if (TERMS[id].nut) once('splice', () => say('Splices get a wire nut. Drag the grip round it, clockwise!', 5, talker(id)));
+      else once('pigtail', () => say('Two wires on one screw? On the job you pigtail them. Drag the grip round the wire nut, clockwise!', 7, talker(id)));
+      status(TOUCH ? 'Twist the wire nut on: drag the brass grip round it clockwise (or tap the nut three times).' : 'Twist the wire nut on: drag the brass grip round it clockwise (or click it three times, or press Enter).');
+      showTwist(id);
     });
   }
 
@@ -1664,7 +1841,7 @@
   };
   for (const l of LAMPS) l.t.brain = lampBrain(l.t);
   for (const s of SWS) {
-    const me = s.toon, other = SWS.find(o => o !== s);
+    const me = s.toon, other = s.rival || SWS.find(o => o !== s);
     s.glare = -9;
     me.brain = (t, dt, tg, d) => {
       tg.lever = leverOf(s.id, st.sw[s.id]);
@@ -1676,8 +1853,8 @@
       if (PH.st === 'swap' && s.id === 'S2') { tg.shake += 2.2; tg.hipX -= 8; tg.hipY += 8; tg.lean -= 7; tg.sy -= 0.06; tg.pupil = 0.4; tg.browRaise = 1.4; d.mouth = 'grit'; tg.mouthOpen = 0.5; tg.lookX = 1; tg.lookY = -0.6; tg.sweat = 1; }
       /* 3-ways: a hard stare down the stairs at the other one after he flips */
       if (other && now < s.glare) {
-        const dir = other.x > s.x ? 1 : -1;
-        tg.lookX = dir; tg.lookY = other.y < s.y ? -0.5 : 0.4; tg.turn += 0.3 * dir; tg.browTilt = -1.2; tg.browRaise = 0; d.mouth = 'grit'; tg.mouthOpen = 0.25;
+        const at = s.glareAt || other, dir = at.x > s.x ? 1 : -1;
+        tg.lookX = dir; tg.lookY = at.y < s.y ? -0.5 : 0.4; tg.turn += 0.3 * dir; tg.browTilt = -1.2; tg.browRaise = 0; d.mouth = 'grit'; tg.mouthOpen = 0.25;
       }
       hoverStiff(me, tg, d);
     };
@@ -1731,9 +1908,9 @@
      tapping foot. Hands that reach across him come in front ('front!'). */
   const SPK = {
     grump: () => ({ d: 1.7, k: [[0.1, { lhx: 30, lhy: 76, rhx: -30, rhy: 76, lg: 'fist', rg: 'fist', lroll: 0.5, rroll: -0.5, browTilt: -1.4, browRaise: 0, mouth: 'grit', mouthOpen: 0.5, turn: 0.25, lookX: 0.3, shake: 0.5 }], [0.45, { mouthOpen: 0.2 }], [0.8, { turn: 0 }]] }),
-    polish: () => ({ d: 1.7, k: [[0.15, { rhx: -98, rhy: -38, rg: 'fist', rroll: 0.6, rLayer: 'front!', lid: 0.6, browTilt: 0.2, lookY: -0.3 }], [0.3, { rhx: -92, rhy: -46 }], [0.45, { rhx: -100, rhy: -34 }], [0.6, { rhx: -93, rhy: -44 }], [0.85, { rhx: 16, rhy: 168, lid: 0.32 }]] }),
-    tie: () => ({ d: 1.5, k: [[0.15, { lhx: 122, lhy: 16, rhx: -122, rhy: 16, lg: 'fist', rg: 'fist', lLayer: 'front!', rLayer: 'front!', lookY: 0.8, browTilt: 0.6, mouth: 'flat' }], [0.4, { lhx: 118, lhy: 20, rhx: -126, rhy: 12 }], [0.62, { lhx: 126, lhy: 12, rhx: -118, rhy: 20 }], [0.9, { lhx: -16, lhy: 168, rhx: 16, rhy: 168, lookY: 0 }]] }),
-    drum: () => ({ d: 1.6, k: [[0.1, { rhx: 26, rhy: 118, rg: 'palm', rroll: 1.2, lookX: 0.6, browTilt: -0.8 }], [0.22, { rhy: 110 }], [0.32, { rhy: 118 }], [0.42, { rhy: 110 }], [0.52, { rhy: 118 }], [0.62, { rhy: 110 }], [0.9, { rhx: 16, rhy: 168 }]] }),
+    polish: () => ({ d: 1.7, k: [[0.15, { rhx: -98, rhy: -38, rg: 'fist', rroll: 0.6, rLayer: 'front!', lid: 0.6, browTilt: 0.2, lookY: -0.3 }], [0.3, { rhx: -92, rhy: -46 }], [0.45, { rhx: -100, rhy: -34 }], [0.6, { rhx: -93, rhy: -44 }], [0.85, { rhx: 40, rhy: 196, lid: 0.32 }]] }),
+    tie: () => ({ d: 1.5, k: [[0.15, { lhx: 122, lhy: 16, rhx: -122, rhy: 16, lg: 'fist', rg: 'fist', lLayer: 'front!', rLayer: 'front!', lookY: 0.8, browTilt: 0.6, mouth: 'flat' }], [0.4, { lhx: 118, lhy: 20, rhx: -126, rhy: 12 }], [0.62, { lhx: 126, lhy: 12, rhx: -118, rhy: 20 }], [0.9, { lhx: -40, lhy: 196, rhx: 40, rhy: 196, lookY: 0 }]] }),
+    drum: () => ({ d: 1.6, k: [[0.1, { rhx: 26, rhy: 118, rg: 'palm', rroll: 1.2, lookX: 0.6, browTilt: -0.8 }], [0.22, { rhy: 110 }], [0.32, { rhy: 118 }], [0.42, { rhy: 110 }], [0.52, { rhy: 118 }], [0.62, { rhy: 110 }], [0.9, { rhx: 40, rhy: 196 }]] }),
     tap: () => ({ d: 1.4, k: [[0.1, { rfy: 10, rtoe: 12, browTilt: -1, lookX: -0.4 }], [0.2, { rfy: 0 }], [0.3, { rfy: 10 }], [0.4, { rfy: 0 }], [0.5, { rfy: 10 }], [0.6, { rfy: 0 }]] }),
     nod: () => ({ d: 1.3, k: [[0.15, { lookY: 0.7, lid: 0.55, mouth: 'smile', mouthOpen: 0.12, browTilt: 0.2, faceY: 6 }], [0.4, { lookY: -0.1, faceY: 0 }], [0.6, { lookY: 0.6, faceY: 5 }], [0.85, { lookY: 0, faceY: 0 }]] }),
     wince: () => ({ d: 0.9, k: [[0.06, { lid: 0.9, mouth: 'grit', mouthOpen: 0.5, browTilt: 1, shake: 1.2, lhx: 14, lhy: 140, lg: 'claw' }], [0.6, { lid: 0.4, shake: 0.3 }]] }),
@@ -1862,21 +2039,32 @@
   /* Level 2: what a flip did to the light decides who argues and who shrugs.
      (Whether it changed is the circuit's answer, not a script.) */
   function threeWayReact(s, litBefore) {
-    const other = SWS.find(o => o !== s);
     const changed = (bulb.lit > 0.9) !== (litBefore > 0.9);
+    /* 1.9: the 4-way flipped. The two 3-ways both turn and stare at him; he
+       just raises his eyebrows */
+    if (changed && s === REF) {
+      if (bulb.lit > 0.9) { const m2 = K.joy(); bulb.play(m2.k, m2.d); }
+      st.worked[s.id] = true;
+      ARGUERS.forEach((a, i) => { a.glare = now + 1.8; a.glareAt = s; setTimeout(() => { const m3 = K.huff(s.x > a.x ? 1 : -1); a.toon.play(m3.k, m3.d); }, 200 + i * 230); });
+      once('refFirst', () => setTimeout(() => say('Middle of the hall. I work it too, gentlemen.', 3.4, s.id), 900));
+      return;
+    }
+    const other = s.rival || SWS.find(o => o !== s);
     if (changed) {
       if (PH.waitSwap) { PH.waitSwap.flips++; PH.waitSwap.flipT = now; }
       if (bulb.lit > 0.9) { const m2 = K.joy(); bulb.play(m2.k, m2.d); }
       st.worked[s.id] = true;
       /* the other one takes it personally */
-      other.glare = now + 2.2;
+      other.glare = now + 2.2; other.glareAt = null;
       setTimeout(() => { const m3 = K.huff(s.x > other.x ? 1 : -1); other.toon.play(m3.k, m3.d); A.sfx.hic(); }, 260 + rand(0, 160));
-      if (st.worked.S1 && st.worked.S2 && !st.inspecting) {
-        once('both', () => setTimeout(() => { say('You BOTH work the light, from either end, whatever the other one does. That\'s the whole point of 3-ways!', 6); const m4 = K.swCheer(); s.toon.play(m4.k, m4.d); }, 900));
-        if (st.told.both && now - (st.quipT || 0) > 6 && Math.random() < 0.5) { st.quipT = now; const q = QUIPS[other.id]; setTimeout(() => say(q[(st.quipN = (st.quipN || 0) + 1) % q.length], 3, other.id), 700); }
+      /* ...and the referee steps in before it comes to blows */
+      if (REF) setTimeout(() => refWhistle(), 1100 + rand(0, 300));
+      if (SWS.every(x => st.worked[x.id]) && !st.inspecting) {
+        once('both', () => setTimeout(() => { say(REF ? 'All THREE of us work it, from anywhere in the hall. That\'s what a 4-way is for.' : 'You BOTH work the light, from either end, whatever the other one does. That\'s the whole point of 3-ways!', 6, REF ? REF.id : 'bulb'); const m4 = K.swCheer(); s.toon.play(m4.k, m4.d); }, 900));
+        if (st.told.both && now - (st.quipT || 0) > 6 && Math.random() < 0.5) { st.quipT = now; const q = (LEVEL.quips || QUIPS)[other.id]; setTimeout(() => say(q[(st.quipN = (st.quipN || 0) + 1) % q.length], 3, other.id), 700); }
       } else if (now - (st.quipT || 0) > 4) {
         st.quipT = now;
-        const q = QUIPS[other.id];
+        const q = (LEVEL.quips || QUIPS)[other.id];
         setTimeout(() => say(q[(st.quipN = (st.quipN || 0) + 1) % q.length], 3.4, other.id), 600);
       }
     } else if (st.wires.length) {
@@ -1885,6 +2073,17 @@
       if (bulb.lit > 0.9) once('stuckOn', () => say('I flipped and... nothing. The light doesn\'t care about me!', 5, s.id));
       else { const m3 = K.confused(); bulb.play(m3.k, m3.d); cricket(); once('dud' + s.id, () => say('Nothing?! Is it me, or is it HIM?', 4, s.id)); }
     }
+  }
+  /* 1.9: the referee blows his whistle and patches it up: whistle to his mouth
+     (a "pop" in his pose brings it up), palms down, settle down. The 3-ways
+     flinch and stop glaring */
+  const REF_LINES = ['Gentlemen.', 'Settle down. Both of you.', 'You BOTH work it. Shake hands.', 'Tweet. That means you.'];
+  function refWhistle() {
+    if (!REF || !App.running || App.current !== SCREEN || st.inspecting || REF.toon.actions.some(a => a.slot === 'big') || now - (st.whistleT || -9) < 5) return;
+    st.whistleT = now;
+    REF.toon.play([[0.08, { pop: 1, mouth: 'O', mouthOpen: 0.5, lhx: -44, lhy: -54, lg: 'palm', rhx: 6, rhy: -66, rg: 'fist', rLayer: 'front!', sy: 1.06, lid: 0.05, browRaise: 1.1 }], [0.45, { pop: 0.95, sy: 1.02 }], [0.62, { pop: 0, mouth: 'flat', mouthOpen: 0.1, lhx: -46, lhy: 6, rhx: 46, rhy: 6, lg: 'palm', rg: 'palm', lroll: 0, rroll: 0, lid: 0.45, browRaise: 0.3 }], [0.8, { lhy: 14, rhy: 14 }], [0.9, { lhy: 4, rhy: 4 }]], 1.9, { cues: [[0.1, () => A.sfx.whistle()]] });
+    setTimeout(() => ARGUERS.forEach((a, i) => { a.glare = -9; const m = K.swFlinch(); a.toon.play(m.k, m.d, { slot: 'small' }); }), 260);
+    if (Math.random() < 0.6) setTimeout(() => say(REF_LINES[(st.refN = (st.refN || 0) + 1) % REF_LINES.length], 2.4, REF.id), 900);
   }
   function blockLive(id) {
     /* 1.1 and 1.2: no warning buzzer, just what really happens. A live screw
@@ -2129,6 +2328,54 @@
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); wrapBy(Math.PI / 4); }
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); wrapBy(-Math.PI / 4); }
   });
+  /* the twist control: while a wire nut waits to go on, a ring sits round it
+     ON TOP of everything (screws' tap targets, characters, labels), with a
+     brass grip to drag round it clockwise: a third of a turn per twist, one
+     full turn and it's on. A tap anywhere in the ring counts as a twist too,
+     so three taps still work. The camera moves in close and holds still. */
+  const TW = { id: null, x: 0, y: 0, ang: -Math.PI / 2, acc: 0, drag: false, last: 0 };
+  const TWR = 40;
+  const twistUI = el('g', { opacity: 0, style: 'display:none' }, L.ui);
+  const twistTap = el('circle', { r: TWR + 16, fill: 'transparent', class: 'clicky' }, twistUI);
+  el('circle', { r: TWR, fill: 'none', stroke: '#1a0c05', 'stroke-width': 7, opacity: 0.25 }, twistUI);
+  el('circle', { r: TWR, fill: 'none', stroke: '#fff3a0', 'stroke-width': 3, 'stroke-dasharray': '6 8', opacity: 0.9 }, twistUI);
+  /* which way: clockwise, the way a nut goes on */
+  el('path', { d: `M${-TWR - 12},-8 A${TWR + 12},${TWR + 12} 0 0,1 ${R((TWR + 12) * Math.cos(-0.5))},${R((TWR + 12) * Math.sin(-0.5))} l-10,-3 m10,3 l0,-10`, fill: 'none', stroke: '#9fe0a8', 'stroke-width': 3.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.85 }, twistUI);
+  const twistGrip = el('g', { class: 'clicky wrapgrip', role: 'slider', tabindex: 0, 'aria-label': 'Twist the wire nut on: drag the grip round it clockwise, or press the right arrow' }, twistUI);
+  el('circle', { r: (TOUCH ? 40 : 26) / KZ, fill: 'transparent' }, twistGrip);
+  el('circle', { r: 13, fill: 'url(#gGold)', stroke: INK, 'stroke-width': 3 }, twistGrip);
+  el('path', { d: 'M-6,-3 H6 M-6,1 H6 M-6,5 H6', stroke: '#7a5316', 'stroke-width': 1.6 }, twistGrip);
+  el('circle', { cx: -4, cy: -5, r: 2.4, fill: '#fff6d8', opacity: 0.8 }, twistGrip);
+  function showTwist(id) {
+    const pg = pig[id];
+    if (!pg) return;
+    TW.id = id; TW.x = pg.J[0]; TW.y = pg.J[1] - 8; TW.ang = -Math.PI / 2; TW.acc = 0; TW.drag = false;
+    twistUI.setAttribute('transform', `translate(${R(TW.x)},${R(TW.y)})`);
+    twistUI.style.display = ''; twistUI.setAttribute('opacity', 1);
+    try { twistGrip.focus({ preventScroll: true }); } catch (e) { /* no focus */ }
+  }
+  function hideTwist() { TW.id = null; TW.drag = false; twistUI.setAttribute('opacity', 0); twistUI.style.display = 'none'; }
+  hideTwist();
+  twistTap.addEventListener('pointerdown', e => { if (!TW.id) return; e.stopPropagation(); e.preventDefault(); twistClick(TW.id); });
+  twistGrip.addEventListener('pointerdown', e => {
+    if (!TW.id) return;
+    e.stopPropagation(); e.preventDefault();
+    const [x, y] = toW(e);
+    TW.drag = true; TW.last = Math.atan2(y - TW.y, x - TW.x);
+    try { svg.setPointerCapture(e.pointerId); } catch (err) { /* capture unsupported */ }
+  });
+  twistGrip.addEventListener('keydown', e => {
+    if (!TW.id) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); TW.ang += (Math.PI * 2) / 3; twistClick(TW.id); }
+  });
+  /* dragging the grip: clockwise turns count, backing off un-counts */
+  function twistBy(d) {
+    if (!TW.id) return;
+    TW.ang += d; TW.acc += d;
+    if (TW.acc < -0.6) TW.acc = -0.6;
+    const step = (Math.PI * 2) / 3;
+    while (TW.id && TW.acc >= step) { TW.acc -= step; twistClick(TW.id); }
+  }
   async function landWire(from, target, rope, o) {
     if (from === target || st.wires.some(w => (w.a === from && w.b === target) || (w.a === target && w.b === from))) {
       A.sfx.boing(); removeEls(o); return;
@@ -2244,7 +2491,7 @@
     if (!job) return;
     const j = job;
     job = null;
-    hideWrap(); hideStrip();
+    hideWrap(); hideStrip(); hideTwist();
     for (const [id, pg] of Object.entries(pig)) if (!pg.snug && pg.res) { pg.res = null; if (countAt(id) >= nutAt(id)) pg.snug = true; else dropPigtail(id); }
     loose.push({ rope: j.rope, o: j.o, pin: { end: 'a', at: pinFor(j.from) }, t0: now, drop: now + 0.4 });
     A.sfx.boing();
@@ -2758,7 +3005,10 @@
       say(report.writeUp ? 'Works. But I\'m writing you up.' : 'Mm-hm. Mm-HM. Report\'s ready.', 2, 'insp');
       await iwait(1.2);
       /* 3-ways have no line or load side: feeding the other end works just as well */
-      if (LEVEL.goal === 'threeway' && wireReach('P.hot', 'S2.com')) report.msg += ' You fed the top switch and ran the light from the bottom one. That works just as well: a 3-way has no line or load side.';
+      if (LEVEL.goal === 'threeway' && wireReach('P.hot', 'S2.com')) {
+        const nm = LEVEL.swHeads ? LEVEL.swHeads.map(s => s.toLowerCase()) : ['bottom', 'top'];
+        report.msg += ` You fed the ${nm[1]} switch and ran the light from the ${nm[0]} one. That works just as well: a 3-way has no line or load side.`;
+      }
     }
     IN.skip = false; IN.aim = null;
     if (App.current !== SCREEN || !st.inspecting) return;
@@ -3262,9 +3512,11 @@
     const g = e.target.closest('.term');
     if (!g || busy()) return;
     e.preventDefault();
-    const id = g.dataset.term;
     cursor = toW(e);
-    if (st.tester) { probe(probeFrom(g, e)); return; }
+    /* tap targets overlap where screws and conductor ends are close: the one
+       nearest the finger wins, not whichever was drawn last */
+    const id = g.dataset.term ? termAt(cursor[0], cursor[1], HIT * 1.15) || g.dataset.term : g.dataset.term;
+    if (st.tester) { probe(g.dataset.term ? ptOf(id) : probeFrom(g, e)); return; }
     if (!id) { recepTap(); return; }
     if (job) return;
     if (st.power) { blockLive(id); return; }
@@ -3288,6 +3540,14 @@
     if (App.current !== SCREEN) return;
     cursor = toW(e);
     lastInput = now;
+    /* dragging the twist grip round a wire nut */
+    if (TW.drag && TW.id) {
+      const ang = Math.atan2(cursor[1] - TW.y, cursor[0] - TW.x);
+      const d = angDiff(ang - TW.last);
+      TW.last = ang;
+      twistBy(d);
+      return;
+    }
     /* dragging the wrap grip round the screw */
     const w = job && job.wrap;
     if (w && w.drag) {
@@ -3312,11 +3572,13 @@
     if (tg !== lead.target) { lead.target = tg; if (tg) { A.sfx.tick(); TERMS[tg].pulse = now; } }
   });
   svg.addEventListener('pointercancel', () => {
+    TW.drag = false;
     if (job && job.wrap) job.wrap.drag = false;
     if (job && job.strip) job.strip.drag = false;
     if (lead && lead.mode === 'drag') cancelLead();
   });
   svg.addEventListener('pointerup', e => {
+    if (TW.drag) { TW.drag = false; return; }
     if (job && job.wrap && job.wrap.drag) { job.wrap.drag = false; return; }
     if (job && job.strip && job.strip.drag) { job.strip.drag = false; return; }
     if (!lead || lead.mode !== 'drag') return;
@@ -3504,6 +3766,16 @@
       cam.lastShake = ev.shake;
       if (now - ev.shake < 0.7) { const at = now - ev.arc < 1 && ev.arcA ? ev.arcA : null; camPush(at ? at.x * KZ : 640, at ? at.y * KZ : 360, 1.06, 0.35, 9); }
     }
+    /* a wire nut going on: in close on it (it stays put on screen, everything
+       round it grows), held still while it's twisted */
+    if (TW.id && !REDUCE && !(G && !G.on)) {
+      const k = 1 - Math.exp(-dt * 7);
+      if (Math.abs(cam.z - 1) < 0.01) { cam.cx = TW.x * KZ; cam.cy = TW.y * KZ; }
+      else { cam.cx += (TW.x * KZ - cam.cx) * k; cam.cy += (TW.y * KZ - cam.cy) * k; }
+      cam.z += ((TOUCH ? 1.8 : 1.45) - cam.z) * k;
+      applyCam();
+      return;
+    }
     /* hands busy (a wire, a strip, a wrap, the tester): the camera holds still */
     if (lead || job || st.tester) return;
     const push = now < cam.until;
@@ -3532,13 +3804,14 @@
         pg.o.glow.setAttribute('opacity', pg.hot ? 0.16 : 0);
       }
       const tu = clamp((now - pg.turn) / 0.25);
-      const rot = (pg.twists + (tu < 1 ? tu - 1 : 0)) * 120;
+      const rot = (pg.twists + (tu < 1 ? tu - 1 : 0) + (TW.id === id ? clamp(TW.acc / 2.094) : 0)) * 120;
       const wob = pg.snug ? 0 : 8 * Math.sin(t * 6);
       pg.nut.setAttribute('transform', `translate(${R(pg.J[0])},${R(pg.J[1])}) rotate(${R(wob)})`);
       let rd = '';
       for (let i = 0; i < 4; i++) { const x = -9 + ((i * 6 + rot / 20) % 18); rd += `M${R(x)},${R(-2 - Math.abs(x) * 0.2)} L${R(x * 0.7)},${R(-20 + Math.abs(x) * 0.3)} `; }
       pg.ribs.setAttribute('d', rd);
-      pg.arrow.setAttribute('opacity', !pg.snug && pg.res ? R((0.6 + 0.4 * Math.sin(t * 8)) * 100) / 100 : 0);
+      /* (the twist ring shows the way now; this little arrow only without it) */
+      pg.arrow.setAttribute('opacity', !pg.snug && pg.res && TW.id !== id ? R((0.6 + 0.4 * Math.sin(t * 8)) * 100) / 100 : 0);
     }
     for (const l of loose) {
       const pinned = l.pin && now < l.drop && l.pin.end !== 'mid';
@@ -3579,6 +3852,8 @@
       sa(p.hit, { cx: R(p.x), cy: R(p.y) });
     }
     toolboxTick(Math.min(0.05, 1 / 24));
+    /* the twist grip rides round its ring */
+    if (TW.id) twistGrip.setAttribute('transform', `translate(${R(Math.cos(TW.ang) * TWR)},${R(Math.sin(TW.ang) * TWR)})`);
     /* the wrap grip rides the end of the copper; let go early and it springs back */
     if (job && job.wrap) {
       const w = job.wrap;
@@ -3877,7 +4152,7 @@
       ev.black0 = ev.black1 = ev.arc = -9;
       /* a clean board every time: no wires, no loose ends, no pigtails, and a
          fresh count for the punch card */
-      cancelLead(true); if (job) { removeEls(job.o); job = null; hideWrap(); hideStrip(); }
+      cancelLead(true); if (job) { removeEls(job.o); job = null; hideWrap(); hideStrip(); hideTwist(); }
       st.wires = [];
       loose.forEach(l => removeEls(l.o)); loose.length = 0;
       slugs.forEach(s => s.g.remove()); slugs.length = 0;
@@ -3899,7 +4174,18 @@
       st.visits = (st.visits || 0) + 1;
     },
     shown() {
-      if (LEVEL.intro) { say(LEVEL.intro[st.visits > 1 ? 1 : 0], 5, LEVEL.introVoice && (LEVEL.introVoice !== 'sparky' || sparky) ? LEVEL.introVoice : 'bulb'); return; }
+      if (LEVEL.intro) {
+        say(LEVEL.intro[st.visits > 1 ? 1 : 0], 5, LEVEL.introVoice && (LEVEL.introVoice !== 'sparky' || sparky) ? LEVEL.introVoice : 'bulb');
+        /* the first time on the stairs-and-halls jobs, the two 3-ways start in on
+           each other; in the hallway the referee blows the whistle on them */
+        if (st.visits === 1 && ARGUERS.length === 2 && (LEVEL.goal === 'threeway' || LEVEL.goal === 'multiway')) {
+          const [A1, A2] = ARGUERS, ok = () => App.current === SCREEN && !st.inspecting;
+          setTimeout(() => { if (ok()) { const m = K.huff(A2.x > A1.x ? 1 : -1); A1.toon.play(m.k, m.d); say('This light answers to ME.', 3, A1.id); } }, 5600);
+          setTimeout(() => { if (ok()) { const m = K.huff(A1.x > A2.x ? 1 : -1); A2.toon.play(m.k, m.d); say('YOU? Hmph.', 2.6, A2.id); } }, 8800);
+          if (REF) setTimeout(() => { if (ok()) refWhistle(); }, 11200);
+        }
+        return;
+      }
       if (ID === 11) { say(st.visits > 1 ? 'Clean board. And that breaker\'s ON again...' : 'A brand-new lampholder! Uh... that breaker\'s still ON, y\'know.', 5); return; }
       if (ID === 12) { say(st.visits > 1 ? 'Clean board. Breaker\'s ON again...' : 'See my chain? No wall switch this time. Oh, and the breaker\'s ON.', 5); return; }
       if (ID === 1) say(st.visits > 1 ? 'Clean board! Fresh start. The breaker\'s off, I checked. Twice.' : 'Oh! You\'re wiring ME? Okay. Okay. Hint button\'s down on the bench if you need it.', 6);
@@ -3910,7 +4196,7 @@
         setTimeout(() => { if (App.current === SCREEN && !st.inspecting) { const m = K.huff(-1); SWS[1].toon.play(m.k, m.d); say('Hmph. We\'ll see about that, down there.', 3.4, 'S2'); } }, 9800);
       }
     },
-    exit() { root.style.display = 'none'; hud.hidden = true; A.sfx.hum(false); particles.clear(); cancelLead(true); if (job) { removeEls(job.o); job = null; hideWrap(); hideStrip(); } setTester(false); },
+    exit() { root.style.display = 'none'; hud.hidden = true; A.sfx.hum(false); particles.clear(); cancelLead(true); if (job) { removeEls(job.o); job = null; hideWrap(); hideStrip(); hideTwist(); } setTester(false); },
     update(t, dt) {
       now = t;
       physics(dt);
@@ -3991,13 +4277,15 @@
   window.CircuitLevel15 = buildLevel(LEVEL15);
   window.CircuitLevel16 = buildLevel(LEVEL16);
   window.CircuitLevel2 = buildLevel(LEVEL2);
+  window.CircuitLevel18 = buildLevel(LEVEL18);
+  window.CircuitLevel19 = buildLevel(LEVEL19);
   /* Unlocks. Nothing a player has already reached is ever taken away: 1.1 and
      Flip the Switch (the old first job) are always open, and each job opens
      once the one before it on the sign is approved (or anything after it
      already has been). Stairway Lights also stays open to anyone who'd passed
      Flip the Switch before the jobs between them were built. */
   const won = store => { try { return !!(JSON.parse(localStorage.getItem(store) || 'null') || {}).won; } catch (e) { return false; } };
-  const ORDER = [LEVEL11, LEVEL12, LEVEL1, LEVEL14, LEVEL15, LEVEL16, LEVEL2];
+  const ORDER = [LEVEL11, LEVEL12, LEVEL1, LEVEL14, LEVEL15, LEVEL16, LEVEL2, LEVEL18, LEVEL19];
   const ALWAYS = new Set(['lvl11', 'level']);
   const openAt = i => ALWAYS.has(ORDER[i].screen) || ORDER.some((L, j) => j >= i - 1 && won(L.store)) || (ORDER[i].screen === 'level2' && won(LEVEL1.store));
   window.CircuitLevels = {
@@ -4008,6 +4296,10 @@
     refresh() {
       const row = document.querySelector('#levelCard .jobs');
       if (!row) return;
+      /* more than five jobs: two columns, so it still fits a phone held sideways */
+      const n = row.querySelectorAll('[data-level]').length, card = document.getElementById('levelCard');
+      card.classList.toggle('many', n > 5);
+      row.style.setProperty('--rows', Math.ceil(n / 2));
       const LOCK = '<svg viewBox="0 0 24 28"><path d="M6.5 12.5 V8.5 a5.5 5.5 0 0 1 11 0 v4" fill="none" stroke="currentColor" stroke-width="3.4"/><rect x="3" y="12" width="18" height="14" rx="2.5" fill="currentColor"/><circle cx="12" cy="18" r="2.3" fill="#e8d7ae"/><path d="M12 19 v4" stroke="#e8d7ae" stroke-width="2.2"/></svg>';
       const CHECK = '<svg viewBox="0 0 28 24"><path d="M3 13 L10.5 20 L25 3.5" fill="none" stroke="currentColor" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       for (const L of ORDER) {

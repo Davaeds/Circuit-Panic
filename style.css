@@ -108,6 +108,10 @@ body { margin: 0; background: var(--night); color: var(--paper); font-family: va
 .touch #levelCard .job .js { width: max(1.7cqw, 18px); height: max(1.7cqw, 18px); }
 .touch #levelCard .sign-back { min-height: 44px; font-size: max(1.2cqw, 13px); }
 .touch #levelCard .sign-sub { display: none; }
+/* a long chapter: the sign goes wide and the jobs run in two columns, in order down each */
+#levelCard.jobsign.many { width: min(54cqw, 96%); }
+#levelCard.many .jobs { grid-template-columns: 1fr 1fr; grid-auto-flow: column; grid-template-rows: repeat(var(--rows, 5), auto); column-gap: .8cqw; }
+.touch #levelCard.jobsign.many { width: min(70cqw, 96%); }
 /* the Inspector's bonus question on the Level 2 report: quick, big, skippable */
 .bonus { margin: .2cqw 0 .6cqw; padding-top: .5cqw; border-top: .15cqw dashed #8a6a3a; }
 .bonus-q { margin: 0 0 .3cqw; font-size: 1.15cqw; }
