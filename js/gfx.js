@@ -118,8 +118,10 @@ void main(){
   const GFX = {
     ok: false, on: false, q: 'off', want: 'auto', film: true, touch: TOUCH,
     NL: 12, NS: 8, L: [], S: [], D: [], F: [], amb: [1, 1, 1], grade: [1, 0.965, 0.9], vig: 0.42,
-    k: 1, ox: 0, oy: 0, papers: [], paperURL: null, last: -1, ema: 0, slow: 0, tPrev: 0,
-    autoLow: store.get('circuitPanic.gfxAutoLow') === '1',
+    k: 1, ox: 0, oy: 0, papers: [], paperURL: null, last: -1, ema: 0, slow: 0, tPrev: 0, tStart: 0,
+    /* a demotion to Low lasts this session only (an older build remembered it,
+       which could leave a fast phone stuck on Low after one bad moment) */
+    autoLow: (store.set('circuitPanic.gfxAutoLow', ''), false),
 
     init(frame, want, film) {
       this.frame = frame; this.film = film !== false;
@@ -167,6 +169,9 @@ void main(){
       for (const im of this.papers) im.style.display = this.on ? '' : 'none';
       /* High draws the grain on the GPU; Low and Off keep the old grain canvas */
       if (window.FX && FX.Film) FX.Film.grain = !(this.on && q === 'high');
+      /* High boils the ink at the full 24 a second (four drawings) on every
+         device: the rigs redraw at 24 anyway, so it costs no extra filter work.
+         Low and Off boil on twos (12, three drawings) */
       this.boilFps = q === 'high' ? 24 : 12;
       if (this.on) { this.resize(); if (!this.paperURL) this.makePaper(); }
       this.last = -1;
@@ -174,11 +179,19 @@ void main(){
     resize() {
       if (!this.on || !this.cv) return;
       const b = this.frame.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const s = this.q === 'high' ? (TOUCH ? 1 : Math.min(dpr, 1.5)) : 0.5;
-      const w = Math.max(16, Math.round(Math.min(b.width * s, this.q === 'high' ? 2400 : 900))), h = Math.max(9, Math.round((w * 9) / 16));
-      if (this.cv.width !== w || this.cv.height !== h) { this.cv.width = w; this.cv.height = h; }
-      this.last = -1;
+      if (b.width < 8) return;
+      /* internal resolution: light is soft, so it never needs the full device
+         pixel ratio (a folding phone's DPR would make a huge buffer) */
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const s = this.q === 'high' ? (TOUCH ? dpr * 0.6 : Math.min(dpr, 1.5)) : 0.5;
+      const w = Math.max(16, Math.round(Math.min(b.width * s, this.q === 'high' ? 2048 : 900))), h = Math.max(9, Math.round((w * 9) / 16));
+      /* re-allocate only for a real change, and redraw at once: a resized canvas
+         is blank, and a blank frame of the light pass reads as a flicker */
+      if (Math.abs(this.cv.width - w) > 2 || Math.abs(this.cv.height - h) > 2) {
+        this.cv.width = w; this.cv.height = h;
+        this.last = -1;
+        if (this.tPrev && this.ok && this.on) this.draw(this.tPrev, Math.floor(this.tPrev * 24));
+      }
     },
     makePaper() {
       const gl = this.gl, cv = this.cv, pw = 1024, ph = 576, ow = cv.width, oh = cv.height;
@@ -254,24 +267,99 @@ void main(){
       if (o.flip) im.setAttribute('transform', `translate(${2 * x + w},0) scale(-1,1)`);
       if (this.paperURL && this.paperURL !== 'pending') im.setAttribute('href', this.paperURL);
       im.style.display = this.on ? '' : 'none';
-      parent.appendChild(im);
+      /* o.before: lay it in just above a layer, outside any filtered group (a
+         paper inside an ink-filtered group makes that filter cover the whole wall) */
+      if (o.before) parent.insertBefore(im, o.before); else parent.appendChild(im);
       this.papers.push(im);
       return im;
     },
 
+    /* depth of field, baked: the static back wall is drawn ONCE into a bitmap,
+       blurred, and shown as one <image> in its place while depth of field is on
+       (High). A live blur filter re-ran on every frame anything moved in front
+       of the wall (which is why it used to be desktop-only); a plain bitmap is
+       cheaper to draw than the vector wall itself, so phones get it for free.
+       groups: static <g>s sharing one parent (the image goes in just before the
+       first); box: the area to bake, in that parent's units; o.k: that parent's
+       scale on the stage (a pulled-back camera); o.blur: stdDeviation in units. */
+    dof(groups, box, o = {}) {
+      const ctl = { on: false, ready: false, busy: false, img: null, want: false };
+      const show = () => {
+        const baked = ctl.want && ctl.ready;
+        ctl.img.style.display = baked ? '' : 'none';
+        for (const g of groups) g.style.display = baked ? 'none' : '';
+      };
+      const bake = () => {
+        ctl.busy = true;
+        try {
+          const ser = new XMLSerializer(), defs = [...groups[0].ownerSVGElement.querySelectorAll('defs')].map(d => ser.serializeToString(d)).join('');
+          const body = groups.map(g => {
+            const c = g.cloneNode(true);
+            c.removeAttribute('filter'); c.removeAttribute('transform'); c.removeAttribute('style');
+            c.querySelectorAll('[data-nobake]').forEach(n => n.remove());
+            return ser.serializeToString(c);
+          }).join('');
+          /* device pixels per unit, capped: a blurred wall never needs more */
+          const fw = this.frame ? this.frame.getBoundingClientRect().width * (window.devicePixelRatio || 1) : 1280;
+          const s = Math.max(0.6, Math.min(1.25, (fw / 1280) * (o.k || 1)));
+          const pw = Math.round(box.w * s), ph = Math.round(box.h * s);
+          const src = `<svg xmlns="${NSVG}" xmlns:xlink="http://www.w3.org/1999/xlink" width="${pw}" height="${ph}" viewBox="${box.x} ${box.y} ${box.w} ${box.h}" preserveAspectRatio="none">${defs}${body}</svg>`;
+          const url = URL.createObjectURL(new Blob([src], { type: 'image/svg+xml' }));
+          const im = new Image();
+          im.onload = () => {
+            try {
+              const cv = document.createElement('canvas');
+              cv.width = pw; cv.height = ph;
+              const x = cv.getContext('2d');
+              /* sharp first, then the blur over it, so the edges stay solid */
+              x.drawImage(im, 0, 0, pw, ph);
+              if ('filter' in x) { x.filter = `blur(${((o.blur || 1.1) * s).toFixed(2)}px)`; x.drawImage(im, 0, 0, pw, ph); x.filter = 'none'; }
+              URL.revokeObjectURL(url);
+              cv.toBlob(b => {
+                ctl.busy = false;
+                if (!b) return;
+                ctl.img.setAttribute('href', URL.createObjectURL(b));
+                ctl.ready = true; show();
+              }, 'image/png');
+            } catch (e) { ctl.busy = false; ctl.failed = true; }
+          };
+          im.onerror = () => { ctl.busy = false; ctl.failed = true; URL.revokeObjectURL(url); };
+          im.src = url;
+        } catch (e) { ctl.busy = false; ctl.failed = true; }
+      };
+      ctl.img = document.createElementNS(NSVG, 'image');
+      for (const [k, v] of Object.entries({ x: box.x, y: box.y, width: box.w, height: box.h, preserveAspectRatio: 'none', 'pointer-events': 'none' })) ctl.img.setAttribute(k, v);
+      ctl.img.style.display = 'none';
+      groups[0].parentNode.insertBefore(ctl.img, groups[0]);
+      /* set(on): show the soft wall (baking it the first time) or the live one */
+      ctl.set = on => {
+        ctl.want = !!on;
+        if (ctl.want && !ctl.ready && !ctl.busy && !ctl.failed) bake();
+        show();
+      };
+      return ctl;
+    },
+
     /* ---------- the draw, 24 times a second ---------- */
     render(t) {
-      /* phones on Auto that can't hold ~40 fps drop to Low (and remember it) */
+      /* a phone on Auto that really can't keep up (well under 30 fps for six
+         seconds straight, after a ten-second settling-in, one-off hitches such
+         as loading ignored) drops to Low for this session */
       const dt = this.tPrev ? t - this.tPrev : 0;
       this.tPrev = t;
-      if (dt > 0 && dt < 0.25) this.ema += (dt - this.ema) * 0.05;
-      if (TOUCH && this.want === 'auto' && this.q === 'high' && dt > 0 && dt < 0.25) {
-        this.slow = this.ema > 1 / 40 ? this.slow + dt : 0;
-        if (this.slow > 4) { this.autoLow = true; store.set('circuitPanic.gfxAutoLow', '1'); this.apply(); if (this.onAuto) this.onAuto(); }
+      if (!this.tStart) this.tStart = t;
+      const steady = dt > 0 && dt < 0.1 && !document.hidden;
+      if (steady) this.ema += (dt - this.ema) * 0.03;
+      if (TOUCH && this.want === 'auto' && this.q === 'high' && steady && t - this.tStart > 10) {
+        this.slow = this.ema > 1 / 28 ? this.slow + dt : 0;
+        if (this.slow > 6) { this.autoLow = true; this.apply(); if (this.onAuto) this.onAuto(); }
       }
       if (!this.on || !this.ok) return;
       const f = Math.floor(t * 24);
       if (f === this.last) return;
+      this.draw(t, f);
+    },
+    draw(t, f) {
       this.last = f;
       const gl = this.gl, u = this.u;
       const list = this.L.slice();

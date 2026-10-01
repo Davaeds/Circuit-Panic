@@ -54,9 +54,6 @@
   <radialGradient id="gVolume" cx="34%" cy="28%" r="85%"><stop offset="0" stop-color="#fffaf0" stop-opacity=".35"/><stop offset=".45" stop-color="#fffaf0" stop-opacity="0"/><stop offset=".8" stop-color="#5a2e10" stop-opacity=".18"/><stop offset="1" stop-color="#3a1a08" stop-opacity=".42"/></radialGradient>
   <linearGradient id="gBox" x1="0" x2="1"><stop offset="0" stop-color="#6e6a63"/><stop offset=".4" stop-color="#c4bfb4"/><stop offset="1" stop-color="#5a5650"/></linearGradient>
   ${[0, 1, 2, 3].map(i => `<filter id="boil${i}" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="1" seed="${i * 7 + 3}"/><feDisplacementMap in="SourceGraphic" scale="1.9" xChannelSelector="R" yChannelSelector="G" result="b"/>${INKDROP}${GRADE}</filter><filter id="boilT${i}" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="1" seed="${i * 7 + 3}"/><feDisplacementMap in="SourceGraphic" scale="1.9" xChannelSelector="R" yChannelSelector="G" result="b"/>${INKDROP}</filter>`).join('')}
-  ${/* rim light (High quality): the same boiling ink, plus a warm edge on the side
-       and top facing the lamp: pixels whose neighbour toward the light is empty */
-    [0, 1, 2, 3].map(i => ['L', 'R'].map(S => `<filter id="rim${S}${i}" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="1" seed="${i * 7 + 3}"/><feDisplacementMap in="SourceGraphic" scale="1.9" xChannelSelector="R" yChannelSelector="G" result="b"/>${INKDROP}${GRADE.replace('/>', ' result="g"/>')}<feOffset in="b" dx="${S === 'R' ? -4 : 4}" dy="4" result="sh"/><feComposite in="b" in2="sh" operator="out" result="edge"/><feFlood flood-color="#ffc56a"/><feComposite in2="edge" operator="in" result="rim"/><feComposite in="g" in2="rim" operator="arithmetic" k2="1" k3="0.55"/></filter>`).join('')).join('')}
   <filter id="inkOnly" x="-8%" y="-8%" width="116%" height="116%"><feOffset in="SourceGraphic" dx="0" dy="0" result="b"/>${INKDROP}${GRADE}</filter>
   <filter id="inkProps" x="-4%" y="-4%" width="108%" height="108%"><feOffset in="SourceGraphic" dx="0" dy="0" result="b"/>${INKDROP}</filter>
   <filter id="softBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
@@ -347,6 +344,10 @@
          Each rig gets its own stiffness so no two jiggle in step; cfg.soft scales it */
       this.jig = { y: 0, v: 0, l: 0, lv: 0, k: 780 + (this.phase % 1) * 340, g: cfg.soft == null ? 1 : cfg.soft };
       this.pv = null;
+      /* smear frames: speed lines trail the fastest moves (see render) */
+      this.rv = [0, 0]; this.rp = null;
+      this.smearL = el('path', { fill: 'none', stroke: INK, 'stroke-width': 3.5, 'stroke-linecap': 'round', opacity: 0 }, this.root);
+      this.root.insertBefore(this.smearL, this.backG);
 
       this.arms = [];
       if (cfg.arms !== false) {
@@ -382,6 +383,23 @@
       building = this;
       this.parts = cfg.draw ? cfg.draw(this.bodyG, this) : {};
       building = null;
+      /* rim light (High): a warm lit edge just inside the silhouette on the side
+         facing the nearest lamp. Plain vector, no filter: the outline is stroked
+         again, slid away from the light and clipped to the shape, so it costs a
+         phone next to nothing (an extra filter pass per character every frame
+         was what made the old one desktop-only). A rig whose outline moves (the
+         bulb) feeds its new shape through rimShape(). */
+      const rimD = cfg.rim || (cfg.slab ? [].concat(cfg.slab)[0].d : null);
+      if (rimD) {
+        const id = 'rim' + uid++;
+        const cp = el('clipPath', { id }, scene.defs);
+        this.rimClip = el('path', { d: typeof rimD === 'string' ? rimD : '' }, cp);
+        this.rimG = el('g', { 'clip-path': `url(#${id})`, style: 'display:none', 'pointer-events': 'none' }, this.bodyG);
+        if (this.parts.rimBefore) this.bodyG.insertBefore(this.rimG, this.parts.rimBefore);
+        this.rimP = el('path', { d: typeof rimD === 'string' ? rimD : '', fill: 'none', stroke: '#ffc56a', 'stroke-width': 7, 'stroke-linejoin': 'round', opacity: 0.55 }, this.rimG);
+        this.rimK = '';
+        if (this.parts.glass) this.parts.glass.push(this.rimG);
+      }
       if (cfg.face) {
         this.faceG = el('g', {}, this.bodyG);
         this.cheeks = [-1, 1].map(() => el('ellipse', { fill: '#ff7f6e', opacity: 0.3 }, this.faceG));
@@ -393,6 +411,12 @@
         this.drops = [0, 1].map(() => el('path', { fill: '#dff3ff', stroke: INK, 'stroke-width': 2.6, 'stroke-linejoin': 'round', opacity: 0 }, this.faceG));
       }
       if (this.parts.over) this.parts.over(this.bodyG);
+    }
+
+    /* a rig with a changing outline keeps its rim light on it */
+    rimShape(d) {
+      if (!this.rimP || d === this.rimDd) return;
+      this.rimDd = d; this.rimP.setAttribute('d', d); this.rimClip.setAttribute('d', d);
     }
 
     /* scene position of a point given in body coordinates */
@@ -528,6 +552,10 @@
         }
       }
       this.pv = [vx, vy];
+      /* how fast the whole rig is being carried (a launch, a walk), in body units */
+      const cc = this.cfg;
+      if (this.rp && dt > 0) { this.rv = [(cc.x - this.rp[0]) / dt / cc.scale, (cc.y - this.rp[1]) / dt / cc.scale]; if (Math.hypot(this.rv[0], this.rv[1]) > 6000) this.rv = [0, 0]; }
+      this.rp = [cc.x, cc.y];
       const f = Math.floor(t * 24);
       if (f !== this.frame) { this.frame = f; this.render(t); }
     }
@@ -544,31 +572,69 @@
       /* yaw: turning toward a side narrows the front face and shows the side slab */
       const yaw = clamp(p.turn, -1, 1) * 1.05, kx = c.slab ? 0.8 + 0.2 * Math.cos(yaw) : 1;
       const sxk = p.sx * kx * (1 + jy * 0.65), syk = p.sy * (1 - jy);
-      const tf = (x, y) => { x *= sxk; y *= syk; return [hx + x * cs - y * sn, hy + x * sn + y * cs]; };
+      /* smear frame: on the fastest frames of a take or a launch the whole body
+         (limbs included) stretches along its motion, squeezing across it */
+      /* (measured: a jolt peaks near 375 body units/s, a bump near 170; being
+         carried only counts at launch speed, so walks and runs never smear) */
+      const fast = Math.hypot(this.rv[0], this.rv[1]) > 900;
+      const svx = (this.v.hipX || 0) + (fast ? this.rv[0] : 0), svy = (this.v.hipY || 0) + (fast ? this.rv[1] : 0), sp = Math.hypot(svx, svy);
+      const sm = sp > 260 && sp < 6000 ? Math.min(0.45, (sp - 260) / 330) : 0;
+      let M = null;
+      if (sm > 0.02) {
+        const ca = svx / sp, sa2 = svy / sp, k = 1 + sm, q = 1 / Math.sqrt(k);
+        M = [k * ca * ca + q * sa2 * sa2, (k - q) * ca * sa2, k * sa2 * sa2 + q * ca * ca];
+      }
+      const tf = (x, y) => {
+        x *= sxk; y *= syk;
+        let dx = x * cs - y * sn, dy = x * sn + y * cs;
+        if (M) { const ex = M[0] * dx + M[1] * dy; dy = M[1] * dx + M[2] * dy; dx = ex; }
+        return [hx + dx, hy + dy];
+      };
       this.cur = { hx, hy, lean, sx: sxk, sy: syk };
       /* overlapping action: the hands trail a fast body move by a few frames */
       const hdx = clamp(-(this.v.hipX || 0) * 0.03, -9, 9), hdy = clamp(-(this.v.hipY || 0) * 0.025, -9, 9);
 
-      this.root.setAttribute('transform', `translate(${R(c.x)},${R(c.y)}) scale(${c.scale})`);
-      this.bodyG.setAttribute('transform', `translate(${R(hx)},${R(hy)}) rotate(${R(lean)}) scale(${R(sxk * 1000) / 1000},${R(syk * 1000) / 1000})`);
+      const rt = `translate(${R(c.x)},${R(c.y)}) scale(${c.scale})`;
+      if (rt !== this.rt) { this.rt = rt; this.root.setAttribute('transform', rt); }
+      this.bodyG.setAttribute('transform', `translate(${R(hx)},${R(hy)})${M ? ` matrix(${M[0].toFixed(3)},${M[1].toFixed(3)},${M[1].toFixed(3)},${M[2].toFixed(3)},0,0)` : ''} rotate(${R(lean)}) scale(${R(sxk * 1000) / 1000},${R(syk * 1000) / 1000})`);
+      /* ...with three inked speed lines streaming off behind it */
+      if (M) {
+        const h0 = (c.hits && c.hits[0]) || { x: 0, y: -110, r: 60 }, [bx, by] = tf(h0.x, h0.y);
+        const ux = -svx / sp, uy = -svy / sp, r = h0.r, len = r * (0.8 + sm * 2.2), segs = [];
+        for (const o of [-0.55, 0, 0.55]) {
+          const ox = bx - uy * r * o + ux * r * 0.9, oy = by + ux * r * o + uy * r * 0.9, l = len * (o ? 0.75 : 1);
+          segs.push(`M${R(ox)},${R(oy)} L${R(ox + ux * l)},${R(oy + uy * l)}`);
+        }
+        this.smearL.setAttribute('d', segs.join(' '));
+        this.smearL.setAttribute('opacity', R(Math.min(1, sm * 3) * 70) / 100);
+        this.smeared = true;
+      } else if (this.smeared) { this.smearL.setAttribute('opacity', 0); this.smeared = false; }
       if (this.slabG) {
         const depth = [].concat(c.slab)[0].depth || 12;
         this.slabG.setAttribute('transform', `translate(${R(-Math.sin(yaw) * depth / kx)},0)`);
       }
       for (const v of this.vols) v.setAttribute('transform', `translate(${R(Math.sin(yaw) * 16)},0)`);
       /* line boil: the ink is redrawn every frame, 24 a second on High (four
-         drawings), 12 on Low or with the GPU pass off (three) */
+         drawings), 12 on Low or with the GPU pass off (three). The rig redraws
+         at 24 anyway, so the full rate costs a phone nothing extra */
       const bf = window.GFX && GFX.on && GFX.boilFps > 12 ? 24 : 12;
       /* rim light on High: a warm edge on the side facing the nearest lamp
          (scenes list their lamps' x and say when the room is dark) */
       let rim = '';
       const lamps = this.scene.lamps;
-      if (bf > 12 && lamps && lamps.length && !this.scene.dark && this.boil && this.scene.boil) {
+      if (this.rimG && bf > 12 && lamps && lamps.length && !this.scene.dark && this.boil && this.scene.boil) {
         const lx = lamps.reduce((m, x) => (Math.abs(x - c.x) < Math.abs(m - c.x) ? x : m), lamps[0]);
         rim = lx >= c.x ? 'R' : 'L';
       }
+      if (rim !== this.rimK && this.rimG) {
+        this.rimK = rim;
+        this.rimG.style.display = rim ? '' : 'none';
+        if (rim) this.rimP.setAttribute('transform', rim === 'R' ? 'translate(-7,7)' : 'translate(7,7)');
+      }
       const bi = Math.floor(t * bf) % (bf > 12 ? 4 : 3);
-      this.root.setAttribute('filter', this.boil && this.scene.boil ? (rim ? `url(#rim${rim}${bi})` : `url(#boil${bi})`) : 'url(#inkOnly)');
+      const fv = this.boil && this.scene.boil ? `url(#boil${bi})` : 'url(#inkOnly)';
+      /* touch the DOM only when the drawing really changes */
+      if (fv !== this.fv) { this.fv = fv; this.root.setAttribute('filter', fv); }
 
       const air = c.shadowFixed ? 0 : clamp(-p.hipY / 120);
       sa(this.shadow, { cx: c.shadowFixed ? 0 : R(hx * 0.6), cy: 6, rx: R((c.shadowW == null ? 70 : c.shadowW) * (1 - air * 0.4)), ry: R(13 * (1 - air * 0.4)), opacity: R((1 - air * 0.6) * 10) / 10 });
@@ -697,8 +763,8 @@
       face: { x: 0, y: -160, spacing: 23, rx: 16, ry: 24, mouthY: 42, mouthW: 22, turnShift: 22, browW: 6.5, pop: 100, sweatOut: 86, maxOpen: 1 },
       life: { breath: 2.9, bounce: 7, sway: 4, lean: 2.2, nervous: 0.28 },
       pose: { lhx: -22, lhy: 50, rhx: 22, rhy: 50, lbend: 0.3, rbend: 0.3, browTilt: 0.8, browRaise: 0.35, lid: 0.16, pupil: 0.82, mouthOpen: 0.25, knee: -0.2, glow: 0.1 },
-      disc: { lg: 'fist', rg: 'fist', mouth: 'worry' },
-      draw(g) {
+      disc: { lg: 'fist', rg: 'fist', mouth: 'worry' }, rim: true,
+      draw(g, tn) {
         const halo = el('circle', { cx: 0, cy: -150, r: 170, fill: 'url(#gGlow)', opacity: 0 }, g);
         el('path', { d: 'M-12,-3 Q0,13 12,-3 Z', fill: INK }, g);
         el('rect', { x: -19, y: -13, width: 38, height: 11, rx: 3, fill: '#2a211c', stroke: INK, 'stroke-width': 4 }, g);
@@ -720,17 +786,23 @@
         return {
           /* everything made of glass, so a level can shatter it */
           glass: [glassOff, glassOn, outline, halo, hl, shade, coilGlow, coilHot],
+          rimBefore: outline,
           lidColor: p => hexLerp('#ece3cb', '#ffe57e', clamp(p.glow)),
           update(p) {
             const rx = 70 - p.stretch * 8, ry = 74 + p.stretch * 16, sh = p.turn * 6;
             const dd = `M-22,-58 C-24,-80 ${R(-rx)},-94 ${R(-rx + sh)},-150 A${R(rx)},${R(ry)} 0 1 1 ${R(rx + sh)},-150 C${R(rx)},-94 24,-80 22,-58 Z`;
             glassOff.setAttribute('d', dd); glassOn.setAttribute('d', dd); outline.setAttribute('d', dd);
+            if (tn.rimK) tn.rimShape(dd);
             const gl = clamp(p.glow, 0, 1.5);
             glassOn.setAttribute('opacity', R(clamp(gl * 1.15) * 100) / 100);
             halo.setAttribute('opacity', R(clamp(gl * 0.95) * 100) / 100);
             halo.setAttribute('r', R(150 + gl * 50));
             coilGlow.setAttribute('opacity', R(clamp(gl * 1.4) * 100) / 100);
             coilHot.setAttribute('opacity', R(clamp(gl * 2) * 100) / 100);
+            /* a filament short of its voltage runs cool: dull orange, not white
+               (written only when the colour changes) */
+            const warm = clamp((gl - 0.12) / 0.5), fc = warm >= 1 ? '#fffbe0' : hexLerp('#ff5a0a', '#fffbe0', warm);
+            if (fc !== tn.fc) { tn.fc = fc; coilHot.setAttribute('stroke', fc); coilGlow.setAttribute('stroke', warm >= 1 ? '#fff3a8' : hexLerp('#ff7a1a', '#fff3a8', warm)); }
             filament.setAttribute('opacity', R(clamp(0.35 + gl * 0.65) * 100) / 100);
             hl.setAttribute('transform', `translate(${R(-p.turn * 14)},${R(-p.stretch * 10)})`);
             shade.setAttribute('transform', `translate(${R(-p.turn * 8)},0)`);
@@ -815,6 +887,7 @@
   function makeFuse(scene, x, y, scale) {
     return new Toon(scene, {
       x, y, scale, hipH: 40, stance: 17, limbW: 5.5, gloveScale: 1.05, shoeScale: 0.72, shadowW: 46, hits: [{ x: 0, y: -140, r: 28 }, { x: 0, y: -80, r: 32 }, { x: 0, y: -16, r: 28 }],
+      rim: 'M-26,-156 H26 V-128 H22 Q36,-76 22,-24 H26 V0 H-26 V-24 H-22 Q-36,-76 -22,-128 H-26 Z',
       shoulders: [[-31, -84], [31, -84]], hips: [[-9, -2], [9, -2]],
       face: { x: 0, y: -94, spacing: 11, rx: 9.5, ry: 13.5, mouthY: 27, mouthW: 9, turnShift: 5, lidColor: '#e6f1f1', browW: 4, blush: 0.34, pop: 52, sweatOut: 42, maxBrow: 0.9, maxOpen: 0.9 },
       life: { breath: 1.9, bounce: 5, beatOffset: 0.25, sway: 2.5, lean: 2.5, nervous: 0.5 },
@@ -888,6 +961,101 @@
           update(p, t, d) {
             knob.setAttribute('transform', `translate(0,-56) rotate(${R(p.dial * 45 - 30)})`);
             if (d.screen !== lastScreen) { text.textContent = d.screen; lastScreen = d.screen; }
+          },
+        };
+      },
+    });
+  }
+
+  /* Sparky Junction (owner-approved, cp-v16): a grumpy steel 4-11/16 box who
+     rules over splices and pigtails. Knockout-ring monocle on a bead chain, a
+     bow tie of two wire nuts. He stands on the bench with two switches in his
+     gangs and the splices in his open belly, so his box never moves: the life
+     is in his face plate (it turns, with its own thickness), his brows, his
+     monocle (it pops out on a scare and dangles), his tie and his gloves.
+     His front is a frame: the gang openings and the belly are see-through, so
+     the wires, nuts and screws behind them show. */
+  function makeJunction(scene, x, y, scale) {
+    const OUT = 'M-131,-322 H131 Q145,-322 145,-308 V-16 Q145,-2 131,-2 H-131 Q-145,-2 -145,-16 V-308 Q-145,-322 -131,-322 Z';
+    const gang = (x0, x1) => `M${x0 + 6},-226 H${x1 - 6} Q${x1},-226 ${x1},-220 V-80 Q${x1},-74 ${x1 - 6},-74 H${x0 + 6} Q${x0},-74 ${x0},-80 V-220 Q${x0},-226 ${x0 + 6},-226 Z`;
+    const BAY = 'M-129,-62 H129 Q135,-62 135,-56 V-18 Q135,-12 129,-12 H-129 Q-135,-12 -135,-18 V-56 Q-135,-62 -129,-62 Z';
+    let mono = null, tie = null, head = null, headSlab = null, outUntil = -9, lastHead = '';
+    return new Toon(scene, {
+      x, y, scale, hipH: 78, stance: 66, limbW: 8, legW: 9, gloveScale: 1.3, shoeScale: 1.08, shadowW: 160, soft: 0, rim: OUT,
+      hits: [{ x: 0, y: -280, r: 64 }, { x: 0, y: -150, r: 120 }],
+      shoulders: [[-146, -262], [146, -262]], hips: [[-70, -4], [70, -4]],
+      face: { x: 0, y: -292, spacing: 34, rx: 16, ry: 19, mouthY: 34, mouthW: 26, turnShift: 15, lidColor: '#b9bdb7', browW: 7.5, pop: 104, sweatOut: 96, maxOpen: 0.8, maxBrow: 1.1 },
+      life: { breath: 4.8, bounce: 0, beatMul: 0.29, beatOffset: 0.2, sway: 0, lean: 0, nervous: 0.04 },
+      pose: { lhx: -16, lhy: 168, rhx: 16, rhy: 168, lbend: 0.18, rbend: 0.18, browTilt: -0.9, browRaise: 0, lid: 0.32, pupil: 0.8, mouthOpen: 0.08, knee: 0.05 },
+      disc: { lg: 'back', rg: 'back', mouth: 'flat' },
+      draw(g) {
+        /* the box's depth, down his right side */
+        el('path', { d: 'M145,-308 L160,-296 V-12 Q160,4 146,6 L131,-2 Q145,-2 145,-16 Z', fill: '#4a4842', stroke: INK, 'stroke-width': 5, 'stroke-linejoin': 'round' }, g);
+        /* the front: one steel frame, the gangs and the belly open */
+        const front = el('path', { d: OUT + ' ' + gang(-135, -8) + ' ' + gang(8, 135) + ' ' + BAY, fill: 'url(#gBox)', 'fill-rule': 'evenodd', stroke: INK, 'stroke-width': 6, 'stroke-linejoin': 'round' }, g);
+        el('path', { d: OUT + ' ' + gang(-135, -8) + ' ' + gang(8, 135) + ' ' + BAY, fill: 'url(#spangle)', 'fill-rule': 'evenodd' }, g);
+        void front;
+        /* the 2-gang ring round the openings, with its four little screws */
+        el('path', { d: 'M-142,-236 H142 M-142,-64 H142', stroke: '#f2f4f5', 'stroke-width': 2.4, opacity: 0.5 }, g);
+        for (const [sx, sy] of [[-72, -232], [72, -232], [-72, -68], [72, -68]]) {
+          el('circle', { cx: sx, cy: sy, r: 4.6, fill: 'url(#gSteel)', stroke: INK, 'stroke-width': 2 }, g);
+          el('path', { d: `M${sx - 3},${sy - 1} L${sx + 3},${sy + 1}`, stroke: INK, 'stroke-width': 1.5 }, g);
+        }
+        /* knockouts down his sides */
+        for (const ky of [-150, -100]) for (const kx of [-140, 140]) { el('circle', { cx: kx, cy: ky, r: 7, fill: 'none', stroke: INK, 'stroke-width': 2, opacity: 0.6 }, g); el('circle', { cx: kx, cy: ky, r: 3, fill: INK, opacity: 0.4 }, g); }
+        el('path', { d: 'M-136,-300 V-30', stroke: '#e6e8e4', 'stroke-width': 4, opacity: 0.55, 'stroke-linecap': 'round' }, g);
+        /* his face plate: a raised blank band, with its own edge for when he turns */
+        head = el('g', {}, g);
+        headSlab = [-1, 1].map(s => el('path', { d: `M${s * 122},-316 L${s * 138},-306 V-240 L${s * 122},-246 Z`, fill: '#57554f', stroke: INK, 'stroke-width': 4, 'stroke-linejoin': 'round', opacity: 0 }, head));
+        el('rect', { x: -126, y: -316, width: 252, height: 72, rx: 10, fill: 'url(#gBox)', stroke: INK, 'stroke-width': 4.5 }, head);
+        el('rect', { x: -126, y: -316, width: 252, height: 72, rx: 10, fill: 'url(#spangle)' }, head);
+        el('path', { d: 'M-114,-306 H90', stroke: '#fbfcfa', 'stroke-width': 3, opacity: 0.6, 'stroke-linecap': 'round' }, head);
+        el('path', { d: 'M-116,-252 H116', stroke: '#3c3a35', 'stroke-width': 3, opacity: 0.35 }, head);
+        /* the bow tie: two wire nuts, tip to tip, knotted with a twist of copper */
+        tie = el('g', { transform: 'translate(0,-236)' }, g);
+        for (const s of [-1, 1]) {
+          el('path', { d: `M${s * 5},-9 L${s * 34},-16 Q${s * 42},0 ${s * 34},16 L${s * 5},9 Z`, fill: 'url(#gNut)', stroke: INK, 'stroke-width': 3.2, 'stroke-linejoin': 'round' }, tie);
+          el('path', { d: `M${s * 13},-10 L${s * 13},10 M${s * 21},-12 L${s * 21},12 M${s * 28},-14 L${s * 28},14`, stroke: '#8a3a06', 'stroke-width': 1.6, opacity: 0.8 }, tie);
+          el('path', { d: `M${s * 30},-11 Q${s * 36},-6 ${s * 36},-1`, fill: 'none', stroke: '#ffe0b0', 'stroke-width': 2, opacity: 0.8, 'stroke-linecap': 'round' }, tie);
+        }
+        el('rect', { x: -7, y: -9, width: 14, height: 18, rx: 4, fill: '#d98a4a', stroke: INK, 'stroke-width': 2.6 }, tie);
+        el('path', { d: 'M-5,-4 L5,0 M-5,2 L5,6', stroke: '#8a4a1a', 'stroke-width': 1.6 }, tie);
+        return {
+          over(gg) {
+            /* the monocle: the ring left round a punched-out knockout, a glint,
+               and a bead chain down to his tie */
+            mono = el('g', {}, gg);
+            mono.chain = el('path', { fill: 'none', stroke: INK, 'stroke-width': 3.6, 'stroke-linecap': 'round', 'stroke-dasharray': '0.1 6' }, mono);
+            mono.ring = el('g', {}, mono);
+            el('circle', { r: 24, fill: '#e8f0f2', opacity: 0.22 }, mono.ring);
+            el('circle', { r: 24, fill: 'none', stroke: INK, 'stroke-width': 9 }, mono.ring);
+            el('circle', { r: 24, fill: 'none', stroke: 'url(#gSteel)', 'stroke-width': 5 }, mono.ring);
+            el('path', { d: 'M-6,-30 L6,-30 L4,-24 L-4,-24 Z', fill: 'url(#gSteel)', stroke: INK, 'stroke-width': 1.8 }, mono.ring);
+            el('path', { d: 'M-15,-12 Q-12,-17 -6,-19', fill: 'none', stroke: '#ffffff', 'stroke-width': 3, opacity: 0.85, 'stroke-linecap': 'round' }, mono.ring);
+          },
+          update(p, t) {
+            const yaw = clamp(p.turn, -1, 1) * 1.05;
+            /* the face plate turns: narrower front, its edge showing on the far side */
+            const kx = R((0.9 + 0.1 * Math.cos(yaw)) * 1000) / 1000, sh = R(-Math.sin(yaw) * 7);
+            const ht = `translate(${sh},0) scale(${kx},1)`;
+            if (ht !== lastHead) { lastHead = ht; head.setAttribute('transform', ht); headSlab[0].setAttribute('opacity', R(clamp(yaw * 4) * 100) / 100); headSlab[1].setAttribute('opacity', R(clamp(-yaw * 4) * 100) / 100); }
+            /* the tie bobs when he talks and jumps when he's startled */
+            tie.setAttribute('transform', `translate(${R(sh * 0.6)},${R(-236 - p.pop * 6)}) rotate(${R(Math.sin(t * 9) * 5 * clamp(p.mouthOpen - 0.15) + p.shake * 2 * Math.sin(t * 31))})`);
+            /* where his right eye is (the rig's own face maths) */
+            const turn = clamp(p.turn, -1, 1), far = Math.max(0, turn);
+            const ex = 0 + turn * 15 + 34 * (1 - 0.2 * Math.abs(turn)), ey = -292 + p.faceY, er = 1 - 0.38 * far;
+            if (p.pop > 0.75 && t > outUntil) outUntil = t + 1.8;
+            const tieAt = [R(sh * 0.6 + 8), -228];
+            if (t < outUntil) {
+              /* popped out: it swings on its chain under his chin */
+              const u = 1 - (outUntil - t) / 1.8, sw = Math.sin(u * 14) * 26 * (1 - u);
+              const mx = ex + 10 + sw, my = ey + 70 - 8 * Math.abs(Math.cos(u * 14));
+              mono.ring.setAttribute('transform', `translate(${R(mx)},${R(my)}) rotate(${R(sw * 1.2)}) scale(0.9)`);
+              mono.chain.setAttribute('d', `M${tieAt[0]},${tieAt[1]} Q${R((tieAt[0] + mx) / 2)},${R(Math.max(tieAt[1], my) + 10)} ${R(mx)},${R(my - 22)}`);
+            } else {
+              mono.ring.setAttribute('transform', `translate(${R(ex)},${R(ey)}) scale(${R(er * 100) / 100},1)`);
+              mono.chain.setAttribute('d', `M${R(ex + 22 * er)},${R(ey + 10)} Q${R(ex + 40)},${R(ey + 40)} ${tieAt[0] + 24},${tieAt[1] + 6}`);
+            }
           },
         };
       },
@@ -1331,5 +1499,5 @@
     }
   }
 
-  window.Toons = { sampleKeys, el, sa, installDefs, Toon, makeBulb, makeOutlet, makeSwitch, makeFuse, makeMeter, makeBoard, makeWire, makeEvilWire, WireSpider, Gremlin, INK, CREAM, clamp, lerp, rand, pick, R, easeIO, noise, hexLerp };
+  window.Toons = { sampleKeys, el, sa, installDefs, Toon, makeBulb, makeOutlet, makeSwitch, makeFuse, makeMeter, makeBoard, makeWire, makeEvilWire, makeJunction, WireSpider, Gremlin, INK, CREAM, clamp, lerp, rand, pick, R, easeIO, noise, hexLerp };
 })();

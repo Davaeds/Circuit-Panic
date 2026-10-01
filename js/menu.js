@@ -30,6 +30,7 @@
     <radialGradient id="gBenchPool"><stop offset="0" stop-color="#ffd996" stop-opacity=".5"/><stop offset=".6" stop-color="#ffcf80" stop-opacity=".2"/><stop offset="1" stop-color="#ffcf80" stop-opacity="0"/></radialGradient>
     <radialGradient id="gHole" cx="45%" cy="45%" r="60%"><stop offset="0" stop-color="#050203"/><stop offset=".7" stop-color="#1a0e0a"/><stop offset="1" stop-color="#3a2216"/></radialGradient>
     <clipPath id="winClip"><rect x="84" y="94" width="192" height="192"/></clipPath>
+    <filter id="dof" x="-2%" y="-2%" width="104%" height="104%"><feGaussianBlur stdDeviation="1.1"/></filter>
   `);
 
   const root = el('g', { id: 'menuRoot' }, svg);
@@ -47,7 +48,7 @@
   el('path', { d: boards.join(' '), stroke: '#2a180e', 'stroke-width': 2.5, opacity: 0.35 }, L.wall);
   for (let i = 0; i < 14; i++) el('ellipse', { cx: rand(20, 1260), cy: rand(60, 460), rx: rand(3, 6), ry: rand(6, 11), fill: 'none', stroke: '#2a180e', 'stroke-width': 1.5, opacity: 0.3 }, L.wall);
   const LAMPX = [300, 930];
-  const pools = LAMPX.map(x => el('ellipse', { cx: x, cy: 100, rx: 330, ry: 420, fill: 'url(#gLampPool)' }, L.wall));
+  const pools = LAMPX.map(x => el('ellipse', { cx: x, cy: 100, rx: 330, ry: 420, fill: 'url(#gLampPool)', 'data-nobake': 1 }, L.wall));
   el('rect', { x: 0, y: 0, width: 1280, height: 30, fill: '#2e1c10' }, L.wall);
   el('path', { d: 'M0,30 H1280', stroke: INK, 'stroke-width': 4 }, L.wall);
   for (let x = 40; x < 1280; x += 160) el('rect', { x, y: 0, width: 26, height: 42, fill: '#3a2414', stroke: INK, 'stroke-width': 3 }, L.wall);
@@ -126,7 +127,7 @@
   el('circle', { cx: 0, cy: 3, r: 2.4, fill: 'url(#gSteel)', stroke: INK, 'stroke-width': 1 }, plate);
   /* the whole back wall is painted on watercolour paper (GPU quality only) */
   const G = window.GFX;
-  if (G) G.paper(L.props, 0, 0, 1280, 480);
+  const wallPaper = G ? G.paper(root, 0, 0, 1280, 480, { before: L.bench }) : null;
 
   /* hanging shop lamps */
   const lamps = LAMPX.map((x, i) => {
@@ -189,7 +190,7 @@
     el('path', { d: `M${x0 + 8},618 H${x1 - 8}`, stroke: '#8a5a34', 'stroke-width': 2.5, opacity: 0.6 }, L.bench);
     el('rect', { x: (x0 + x1) / 2 - 26, y: 642, width: 52, height: 12, rx: 6, fill: 'url(#gBrass)', stroke: INK, 'stroke-width': 3 }, L.bench);
   }
-  if (G) G.paper(L.bench, 0, 468, 1280, 252, { flip: true, opacity: 0.85 });
+  if (G) G.paper(root, 0, 468, 1280, 252, { flip: true, opacity: 0.85, before: L.villain });
   /* small props live at the front edge of the bench, clear of the back lane the
      fuse and switch walk along */
   const PROPS = [];
@@ -968,14 +969,33 @@
     });
   }
 
-  /* the HTML menu buttons sit on the painted sign, so they take the camera too */
   const REDUCE_M = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  function navDrift(z, x, y) {
-    if (z === 1 && !x && !y) { if (nav.style.transform) nav.style.transform = ''; return; }
-    const s = App.frame.clientWidth / 1280;
-    nav.style.transformOrigin = `${R(640 * s - nav.offsetLeft)}px ${R(360 * s - nav.offsetTop)}px`;
-    nav.style.transform = `translate(${R(x * s)}px,${R(y * s)}px) scale(${Math.round(z * 10000) / 10000})`;
+  /* parallax: the back wall is further off than the bench (the reference plane,
+     with the sign and its buttons), the lamps hang nearer. On a desktop the planes
+     really slide against each other with the mouse; on a phone, a tilt (when the
+     sensor reports one; we never prompt for it) pans the compositor camera, which
+     costs nothing, and otherwise the slow drift carries on alone. */
+  const TOUCH_M = document.documentElement.classList.contains('touch');
+  const PAR = { x: 0, y: 0, tilt: null, zero: null, back: '', front: '' };
+  window.addEventListener('deviceorientation', e => {
+    if (e.gamma == null || e.beta == null) return;
+    if (!PAR.zero) PAR.zero = [e.gamma, e.beta];
+    PAR.tilt = [clamp((e.gamma - PAR.zero[0]) / 15, -1, 1), clamp((e.beta - PAR.zero[1]) / 15, -1, 1)];
+  });
+  function parallax(fresh, on) {
+    let tx = 0, ty = 0;
+    if (on && PAR.tilt) [tx, ty] = PAR.tilt;
+    else if (on && fresh && !TOUCH_M) { tx = clamp((cursor.x - 640) / 640, -1, 1); ty = clamp((cursor.y - 360) / 360, -1, 1); }
+    PAR.x += (tx - PAR.x) * 0.18; PAR.y += (ty - PAR.y) * 0.18;
+    if (TOUCH_M) return;
+    const back = on ? `translate(${R(-PAR.x * 4)},${R(-PAR.y * 2.5)})` : '';
+    const front = on ? `translate(${R(PAR.x * 9)},${R(PAR.y * 5)})` : '';
+    if (back !== PAR.back) { PAR.back = back; for (const g of [L.wall, L.window, L.spider, L.winFront, L.props, wallPaper, PAR.dofW && PAR.dofW.img]) if (g) { if (back) g.setAttribute('transform', back); else g.removeAttribute('transform'); } }
+    if (front !== PAR.front) { PAR.front = front; for (const g of [L.lamps, L.light]) { if (front) g.setAttribute('transform', front); else g.removeAttribute('transform'); } }
   }
+  /* where each plane sits right now, for the light pass */
+  const parBack = () => (TOUCH_M ? [0, 0] : [-PAR.x * 4, -PAR.y * 2.5]);
+  const parFront = () => (TOUCH_M ? [0, 0] : [PAR.x * 9, PAR.y * 5]);
 
   /* ---------- screen lifecycle ---------- */
   let lastFrame = -1;
@@ -1027,13 +1047,23 @@
          painted-on pools and glows step aside */
       const gl = !!(G && G.on);
       /* the camera drifts, slow as breathing; the sign's buttons ride along */
-      const drift = gl && !REDUCE_M;
-      /* (never less zoom than the pan needs, so no edge of the room ever shows) */
-      const cz = drift ? 1.02 + 0.006 * Math.sin(t * 0.21) : 1, cx = drift ? 7 * Math.sin(t * 0.13) : 0, cy = drift ? 3.5 * Math.sin(t * 0.17 + 1) : 0;
-      if (drift) root.setAttribute('transform', `translate(${R(640 + cx)},${R(360 + cy)}) scale(${Math.round(cz * 10000) / 10000}) translate(-640,-360)`);
-      else if (root.hasAttribute('transform')) root.removeAttribute('transform');
-      navDrift(cz, cx, cy);
-      if (gl) { G.clear(); G.view(cz, 640 * (1 - cz) + cx, 360 * (1 - cz) + cy); G.ambient(black ? [0.15, 0.15, 0.2] : [0.72, 0.68, 0.64]); }
+      /* (one compositor transform via App.camera: the stage, the light pass and the
+         buttons move together, and nothing is re-rasterized. Never less zoom than
+         the pan needs, so no edge of the room ever shows.) */
+      const drift = gl && !REDUCE_M && App.current === 'menu';
+      parallax(cursorFresh, drift);
+      /* the music: the theremin while the Phantom is on the prowl, strings in the
+       blackout, a sleepy pad once nobody's touched anything for a while */
+      if (A.mood && App.running) A.mood({ danger: black ? 1 : 0, phantom: V.st !== 'lurk' && !black ? 0.8 : 0, idle: !black && t - cursor.moved > 20 ? 0.5 : 0 });
+      /* depth of field (High, phones too): the back wall and the night outside a
+         touch soft, so the cast reads in front of them. A once-baked blurred
+         bitmap (GFX.dof), never a live filter */
+      const dof = gl && G.q === 'high';
+      if (dof !== PAR.dof) { PAR.dof = dof; if (!PAR.dofW && dof && G.dof) { PAR.dofW = G.dof([L.wall, L.window], { x: 0, y: 0, w: 1280, h: 480 }); PAR.back = null; } if (PAR.dofW) PAR.dofW.set(dof); }
+      const [pfx, pfy] = parFront(), [pbx, pby] = parBack();
+      if (drift) App.camera(1.02 + 0.006 * Math.sin(t * 0.21), 4.5 * Math.sin(t * 0.13) + (TOUCH_M ? PAR.x * 4 : 0), 2 * Math.sin(t * 0.17 + 1) + (TOUCH_M ? PAR.y * 2.5 : 0));
+      else if (App.current === 'menu') App.camera();
+      if (gl) { G.clear(); G.ambient(black ? [0.15, 0.15, 0.2] : [0.72, 0.68, 0.64]); }
       lamps.forEach((l, i) => {
         const acc = -9.8 / 2.2 * Math.sin(l.th) - 0.8 * l.w + 0.25 * Math.sin(t * 0.6 + l.phase);
         l.w += acc / 24; l.th += l.w / 24;
@@ -1041,6 +1071,9 @@
         l.g.setAttribute('transform', tr); l.coneG.setAttribute('transform', tr);
         const on = black && !stutter ? 0 : 1;
         l.cone.setAttribute('opacity', on);
+        /* on a phone the GPU spot draws the beam; the SVG one (a big screen-blended
+           shape re-rasterized every frame as the lamp swings) steps aside */
+        l.coneG.style.display = gl && G.touch ? 'none' : '';
         l.bulbE.setAttribute('fill', on ? '#fff4c8' : '#5a4a30');
         pools[i].setAttribute('opacity', gl ? 0 : on);
         benchPools[i].setAttribute('opacity', gl ? 0 : on);
@@ -1050,9 +1083,9 @@
              a cone from a point just behind the shade, the hot spot where it meets
              the bench, and bloom round the bulb itself */
           const sn = Math.sin(l.th), cs = Math.cos(l.th), dir = [-sn, cs];
-          G.cone(l.x + sn * 64, 60 - cs * 64, 900, [0.5, 0.42, 0.3], dir, 0.95, 0.83);
+          G.cone(l.x + sn * 64 + pfx, 60 - cs * 64 + pfy, 900, [0.5, 0.42, 0.3], dir, 0.95, 0.83);
           G.light(l.x - sn * (462 / cs), 528, 270, 62, [0.3, 0.25, 0.17]);
-          G.glow(l.x - sn * 38, 60 + cs * 38, 64, [1, 0.93, 0.75], 1.5);
+          G.glow(l.x - sn * 38 + pfx, 60 + cs * 38 + pfy, 64, [1, 0.93, 0.75], 1.5);
         }
       });
       darkRect.setAttribute('opacity', black ? (stutter ? 0.55 : gl ? 0.9 : 0.97) : 0);
@@ -1068,7 +1101,7 @@
         G.glow(blx, bly, 130, [1, 0.9, 0.62], 1.7 * bg);
         /* moonlight through the window, the title's red neon, the sign's chase
            lights and the radio dial */
-        G.light(185, 200, 380, 320, black ? [0.2, 0.25, 0.44] : [0.1, 0.12, 0.22]);
+        G.light(185 + pbx, 200 + pby, 380, 320, black ? [0.2, 0.25, 0.44] : [0.1, 0.12, 0.22]);
         if (!black) {
           const neon = t < ev.panicOff && f % 2 === 0 ? 0.15 : 1;
           G.light(640, 142, 330, 120, [0.42 * neon, 0.09 * neon, 0.05 * neon]);

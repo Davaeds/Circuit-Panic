@@ -53,12 +53,11 @@
     svg, defs, frame, screens: {}, current: null, running: false, busy: false,
     prefs: null,
     register(name, screen) { this.screens[name] = screen; },
+    /* stage units, measured from the frame (16:9, never moved by the camera) */
     toScene(ev) {
-      const m = svg.getScreenCTM();
-      if (!m) return [640, 360];
-      const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
-      const p = pt.matrixTransform(m.inverse());
-      return [p.x, p.y];
+      const r = frame.getBoundingClientRect();
+      if (!r.width) return [640, 360];
+      return [(ev.clientX - r.left) * 1280 / r.width, (ev.clientY - r.top) * 720 / r.height];
     },
     async go(name, opts = {}) {
       if (this.busy) return;
@@ -75,6 +74,8 @@
       await Iris.run('closed', 0.7, cx / 1280, cy / 720);
       if (this.current) this.screens[this.current].exit();
       if (window.GFX) window.GFX.clear();
+      App.camera();
+      if (A.mood) A.mood({});
       this.current = name;
       this.screens[name].enter(opts);
       /* a job gets its title card on an old-film leader while the iris is shut */
@@ -88,6 +89,26 @@
     wait: s => new Promise(r => setTimeout(r, s * 1000)),
   };
   window.App = App;
+  /* the camera: ONE compositor transform shared by the stage, the light pass
+     and the menu sign's buttons, so they can never get out of step, and the SVG
+     is never re-rasterized while it moves (smooth on phones). z zooms about
+     (cx, cy), ox/oy pan; all in stage units (1280 x 720). */
+  const camEls = [svg, document.getElementById('gfx'), document.getElementById('menu')].filter(Boolean);
+  let camKey = '';
+  /* a resize (a folding phone opening, a turn) re-measures the camera's origin */
+  window.addEventListener('resize', () => { camKey = 'stale'; });
+  App.camera = function (z = 1, ox = 0, oy = 0, cx = 640, cy = 360) {
+    const key = z === 1 && !ox && !oy ? '' : `${z.toFixed(4)},${ox.toFixed(1)},${oy.toFixed(1)},${Math.round(cx)},${Math.round(cy)}`;
+    if (key === camKey) return;
+    camKey = key;
+    const s = frame.clientWidth / 1280;
+    for (const e of camEls) {
+      if (!key) { e.style.transform = ''; e.style.willChange = ''; continue; }
+      e.style.transformOrigin = `${(cx * s - (e.offsetLeft || 0)).toFixed(1)}px ${(cy * s - (e.offsetTop || 0)).toFixed(1)}px`;
+      e.style.transform = `translate(${(ox * s).toFixed(2)}px,${(oy * s).toFixed(2)}px) scale(${z.toFixed(4)})`;
+      e.style.willChange = 'transform';
+    }
+  };
   async function titleCard(tc) {
     const c = document.getElementById('jobCard');
     if (!c) return App.wait(0.25);
@@ -251,6 +272,8 @@
   }
   App.start = function (first) {
     App.current = first;
+    /* every screen is built now: let the light pass set up its phone mode */
+    if (G) G.apply();
     App.screens[first].enter({});
     requestAnimationFrame(loop);
   };

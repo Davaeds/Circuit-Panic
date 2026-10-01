@@ -32,6 +32,7 @@
     const cd = cb.getChannelData(0);
     for (let i = 0; i < cd.length; i++) cd[i] = (Math.random() < 0.0009 ? (Math.random() * 2 - 1) * 0.9 : 0) + (Math.random() * 2 - 1) * 0.012;
     crackle = { buf: cb, src: null };
+    layersInit();
     apply();
   }
 
@@ -115,9 +116,50 @@
     return musicStart + beat * BEAT + (i % 2 ? BEAT * 0.64 : 0);
   }
 
+  /* ---------- music layers ----------
+     Four extra parts over the same tune, each on its own fader, faded in by
+     what's happening on screen (AudioSys.mood): a sleepy pad when you're idle,
+     tense tremolo strings for danger, a bright brass line for success, and a
+     theremin with a low drone while the Phantom is out. A part only plays notes
+     while its fader is up (or still fading out). */
+  const LAYERS = ['idle', 'danger', 'success', 'phantom'];
+  const lay = {};
+  function layersInit() {
+    for (const k of LAYERS) { const g = ctx.createGain(); g.gain.value = 0.0001; g.connect(musicBus); lay[k] = { g, want: 0, until: 0 }; }
+  }
+  function mood(m) {
+    if (!ctx || !lay.idle) return;
+    for (const k of LAYERS) {
+      const v = Math.max(0, Math.min(1, (m && m[k]) || 0));
+      const L = lay[k];
+      if (Math.abs(v - L.want) < 0.02) continue;
+      L.want = v;
+      /* in quickly for danger, slow swells for the rest; out over a couple of seconds */
+      L.g.gain.setTargetAtTime(Math.max(0.0001, v), ctx.currentTime, v > 0 ? (k === 'danger' ? 0.25 : 0.9) : 0.7);
+      if (v > 0) L.until = Infinity; else L.until = ctx.currentTime + 3.5;
+    }
+  }
+  const live = k => lay[k] && (lay[k].want > 0.01 || ctx.currentTime < lay[k].until);
+  function playLayers(bar, s, ch, mel, t) {
+    if (live('idle') && s === 0) for (const n of ch.stab) tone(mtof(n - 12), t, 0.6, { type: 'sine', vol: 0.05, attack: 0.35, sustain: BEAT * 2.6, cutoff: 1400, bus: lay.idle.g });
+    if (live('danger')) {
+      tone(mtof(ch.root + 12 + (s % 2)), t, 0.11, { type: 'sawtooth', vol: 0.045, cutoff: 1100, bus: lay.danger.g });
+      if (s === 0) tone(mtof(ch.root - 12), t, 0.35, { type: 'sine', vol: 0.18, glide: mtof(ch.root - 17), bus: lay.danger.g });
+    }
+    if (live('success')) {
+      if (mel != null) tone(mtof(mel + 12), t, 0.14, { type: 'triangle', vol: 0.055, cutoff: 3200, bus: lay.success.g });
+      if (s === 0 || s === 4) for (const n of ch.stab) tone(mtof(n), t, 0.16, { type: 'square', vol: 0.03, cutoff: 1500 + (s === 0 ? 900 : 0), bus: lay.success.g });
+    }
+    if (live('phantom') && s === 0 && bar % 2 === 0) {
+      tone(mtof(ch.stab[0] + 12), t, 0.6, { type: 'sine', vol: 0.06, attack: 0.4, sustain: BEAT * 2.4, glide: mtof(ch.stab[1] + 12), glideT: BEAT * 3, vib: [5.5, 16], cutoff: 4000, bus: lay.phantom.g });
+      tone(mtof(ch.root - 12), t, 0.7, { type: 'sawtooth', vol: 0.06, attack: 0.5, sustain: BEAT * 3, cutoff: 320, bus: lay.phantom.g });
+    }
+  }
+
   function playStep(i, t) {
     const bar = Math.floor(i / 8) % 8, s = i % 8, loop = Math.floor(i / 64);
     const ch = CH[PROG[bar]];
+    if (lay.idle) playLayers(bar, s, ch, (loop % 2 ? MEL_B : MEL)[bar][s], t);
     if (s === 0) tone(mtof(ch.root), t, 0.32, { type: 'triangle', vol: 0.34, cutoff: 900 });
     if (s === 4) tone(mtof(ch.fifth), t, 0.3, { type: 'triangle', vol: 0.3, cutoff: 900 });
     if (s === 7 && bar % 2 === 1) tone(mtof(ch.root + 2), t, 0.14, { type: 'triangle', vol: 0.22, cutoff: 900 });
@@ -330,7 +372,7 @@
   }
 
   window.AudioSys = {
-    settings: S, init, apply, startMusic, stopMusic, beat, duck, sfx: X,
+    settings: S, init, apply, startMusic, stopMusic, beat, duck, sfx: X, mood,
     get ready() { return !!ctx; }, get musicOn() { return musicOn; },
   };
 })();

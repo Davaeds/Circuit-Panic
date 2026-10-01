@@ -45,7 +45,7 @@
     'Rule: kill the power before you work. A breaker doesn\'t trip when a PERSON gets shocked: it protects the wire, not you. The tester in the toolbox shows what\'s live, if you want to look.',
   ];
   const LEVEL11 = {
-    id: 11, num: '1.1', screen: 'lvl11', store: 'circuitPanic.level11', name: 'Toolbox', goal: 'light', par: 3, requireGround: true, guide: true, safety: true, safetyFails: true, colorCode: true, startsLive: true,
+    id: 11, num: '1.1', screen: 'lvl11', store: 'circuitPanic.level11', name: 'Toolbox', goal: 'light', par: 3, requireGround: true, guide: true, safety: true, safetyFails: true, colorCode: true, startsLive: true, toolbox: true, noRed: true,
     form: 'Form 1-TB', next: 'lvl12', nextName: '1.2 Pull Chain', plate: 'THE TOOLBOX',
     objective: 'Install this lampholder on circuit 1. Make it safe.',
     components: [{ id: 'P', type: 'source' }, { id: 'L1', type: 'fixture' }],
@@ -66,7 +66,7 @@
     },
   };
   const LEVEL12 = {
-    id: 12, num: '1.2', screen: 'lvl12', store: 'circuitPanic.level12', name: 'Pull Chain', goal: 'switch', par: 3, requireGround: true, chain: true, safety: true, colorCode: true, startsLive: true,
+    id: 12, num: '1.2', screen: 'lvl12', store: 'circuitPanic.level12', name: 'Pull Chain', goal: 'switch', par: 3, requireGround: true, chain: true, safety: true, colorCode: true, startsLive: true, toolbox: true, noRed: true,
     form: 'Form 1-PC', next: 'level', nextName: '1.3 Flip the Switch', plate: 'THE PULL CHAIN',
     objective: 'Hang the pull-chain light on circuit 1. The chain should work it. Make it safe.',
     components: [{ id: 'P', type: 'source' }, { id: 'L1', type: 'pullchain' }],
@@ -87,10 +87,124 @@
     },
   };
   /* which hint topic each of the Inspector's fault codes belongs to */
-  const HINT_TOPIC = { 'short': 'short', 'ground-fault': 'short', 'no-hot': 'hot', 'neutral-missing': 'neutral', 'reversed': 'polarity', 'hot-enclosure': 'ground', 'no-ground': 'ground', 'ground-as-neutral': 'ground', 'neutral-ground-bond': 'ground', 'wrong-color': 'color' };
+  const HINT_TOPIC = {
+    'short': 'short', 'ground-fault': 'short', 'overvolt': 'short', 'no-hot': 'hot', 'switch-arrangement': 'hot', 'bypass': 'bypass', 'inverted': 'bypass', 'neutral-missing': 'neutral', 'reversed': 'polarity',
+    'hot-enclosure': 'ground', 'no-ground': 'ground', 'ground-as-neutral': 'ground', 'neutral-ground-bond': 'ground', 'wrong-color': 'color', 'switched-neutral': 'swneutral',
+    'series': 'series', 'pair': 'pair', 'hot-on-traveler': 'threeway', 'traveler-on-common': 'threeway', 'not-3way': 'threeway', 'not-multiway': 'threeway', 'fourway-pairs': 'fourway',
+    'no-switch-neutral': 'boxneutral', 'cable': 'cable',
+  };
+  /* the hints any job falls back on for a topic it doesn't word for itself:
+     a nudge, a clearer hint, then the rule (never the whole answer) */
+  const GENERIC_HINTS = {
+    hot: ['Where does the power come IN on this job? Start there.', 'Follow the hot: from where it comes in, through the switch, to the light\'s BRASS screw. Where does it stop?', 'Rule: the hot goes through the switch to the BRASS screw. Hot and neutral only ever meet through the load.'],
+    neutral: ['Electricity goes out AND comes home. What\'s bringing it home?', 'The way home starts at the light\'s SILVER screw.', 'Rule: the neutral (white) runs straight to the light\'s SILVER screw. It never goes through a switch.'],
+    polarity: ['It lights... but is the part your fingers touch changing a bulb safe?', 'The screw shell is on the SILVER side. What\'s landed there?', 'Rule: switched hot to BRASS, neutral to SILVER.'],
+    ground: ['If something went wrong inside a metal box, where would it go?', 'Every metal box needs its own path back to ground.', 'Rule: the bare (or green) ground reaches every metal box\'s green screw. It carries no current unless something\'s wrong.'],
+    short: ['Something runs straight from the push to the way home, with nothing in between.', 'Look for a hot joined to a neutral or a ground without going through a light.', 'Rule: hot and neutral only ever meet THROUGH the load. Hot straight to neutral or ground is a short.'],
+    color: ['The next electrician can\'t see voltage. What does he go by?', 'Check each wire\'s colour against the job it\'s doing.', 'Rule: black (or red) is hot, white is neutral, green or bare is ground. A white used as a hot is re-marked with black tape.'],
+    swneutral: ['The switch is supposed to break the hot. What is it breaking?', 'With the switch OFF, is the socket still live?', 'Rule: a switch goes in the HOT. The neutral runs straight to the SILVER screw.'],
+    bypass: ['Flip the switch. Does the light even notice?', 'Something reaches the light\'s BRASS screw without going through a switch.', 'Rule: the ONLY way to the BRASS screw is through the switch.'],
+    series: ['Both lit... but look how dim. Who\'s sharing what?', 'One after the other, the bulbs split the 120 volts. Each one wants its own.', 'Rule: lights go in PARALLEL: each one from the switched hot to the neutral on its own.'],
+    pair: ['Flip one switch. Which light answers?', 'Each light should answer to ONE switch, and only that one.', 'Rule: one switched hot per light, from its own switch to its own BRASS screw.'],
+    threeway: ['Flip each switch from every position. Which flip does nothing?', 'Dark screw = COMMON, brass screws = travelers. Hot goes to a COMMON; the travelers run between the switches.', 'Rule: hot to one COMMON, the far COMMON feeds the light, travelers from switch to switch.'],
+    fourway: ['A 4-way has two PAIRS of screws. Where did each side\'s travelers land?', 'Both travelers from one 3-way go on ONE pair of the 4-way. The other pair goes on to the other 3-way.', 'Rule: a 4-way never splits a pair: one side in on one pair, out on the other pair.'],
+    boxneutral: ['It works. Will it still work when somebody puts in a smart switch?', 'New switch locations need something brought into the box besides the hots.', 'Rule (NEC 404.2(C)): bring the neutral into a switch box and cap it. With several switches for the same lights, one box will do.'],
+    cable: ['Count what\'s in that cable before you use it.', 'Each conductor in a cable can only be used once, and it only goes where the cable goes.', 'Rule: a 14/2 has a black, a white and a bare. A white used as a hot gets taped, and only as the supply to a switch or a traveler.'],
+    done: ['Looks finished? There\'s only one way to find out.', 'Breaker ON and try every switch. Then call the Inspector.', 'The Inspector checks every connection. Call him when you\'re sure.'],
+  };
+  /* 1.4 Switch Loop: the power comes in at the light, and a 2-wire cable loops
+     down to the switch and back. Framed as an OLD house, on purpose: since the
+     2011 Code (NEC 404.2(C)) a NEW switch loop is run in 14/3 so the switch box
+     gets a neutral; an existing 2-wire loop stays when you only replace the
+     light. In a 2-wire loop the white has to carry a hot, so it's re-marked
+     with black tape, and NEC 200.7(C)(1) lets it be the supply TO the switch,
+     never the switched return to the light. */
+  const LEVEL14 = {
+    id: 14, num: '1.4', screen: 'lvl14', store: 'circuitPanic.level14', name: 'Switch Loop', goal: 'switch', par: 5, requireGround: true, colorCode: true,
+    stage: 'loop', noRed: true, taped: true, fuseX: 262,
+    form: 'Form 1-SL', next: 'lvl15', nextName: '1.5 Two Lights, One Switch',
+    objective: 'Old house: the power comes in at the light, and an old 2-wire switch loop runs down to the switch. Make the switch work the light, and make it right.',
+    components: [{ id: 'P', type: 'source' }, { id: 'S1', type: 'sp' }, { id: 'L1', type: 'fixture' }],
+    boxes: { 'P.hot': 'FX', 'P.neu': 'FX', 'P.gnd': 'FX', 'L1.brass': 'FX', 'L1.silver': 'FX', 'L1.g': 'FX', 'S1.a': 'SB', 'S1.b': 'SB', 'S1.g': 'SB' },
+    boxNames: { FX: 'the light\'s box', SB: 'the switch box' },
+    cables: [{ id: 'loop', a: 'FX', b: 'SB', type: 'an old 14/2', name: 'switch loop', conductors: ['black', 'white'] }],
+    names: {
+      'P.hot': 'the feed\'s BLACK (the power coming in)', 'P.neu': 'the feed\'s WHITE', 'P.gnd': 'the feed\'s bare GROUND',
+      'S1.a': 'the switch\'s left BRASS screw', 'S1.b': 'the switch\'s right BRASS screw', 'S1.g': 'the switch box\'s green GROUND screw',
+      'L1.brass': 'the light\'s BRASS screw', 'L1.silver': 'the light\'s SILVER screw', 'L1.g': 'the light box\'s green GROUND screw',
+    },
+    winText: 'The feed\'s black spliced to the loop\'s white, taped, as the supply DOWN to the switch; the loop\'s black brings the switched hot BACK to the brass; the feed\'s white straight to silver; both boxes grounded. That\'s a switch loop. (Run a new one today in 14/3, so the switch box gets a neutral.)',
+    punch: { fewest: 'No spare wire (five will do)', colors: 'Right colours: taped white only as the supply to the switch, white neutral, green ground' },
+    intro: ['The power comes in up here at MY box this time. The switch is way down the end of that old loop.', 'Clean board. Power still comes in at my box.'],
+    hintSets: {
+      hot: ['The power comes in at MY box this time. How does it get down to the switch, and back?', 'It\'s a loop: one conductor takes the hot DOWN to the switch, the other brings it BACK, switched, to my BRASS screw.', 'Rule: the feed\'s black is spliced to the loop conductor going TO the switch; the conductor coming BACK from the switch lands on my BRASS screw.'],
+      neutral: ['Out and back is only half of it. Where does the current go home?', 'The neutral never goes near the switch. It\'s right here in my box.', 'Rule: the feed\'s white goes straight to my SILVER screw.'],
+      ground: ['Two metal boxes. Are they BOTH safe if something goes wrong?', 'The feed\'s bare lands on my box\'s green screw, and the loop\'s bare carries it on down to the switch box.', 'Rule: every metal box gets the ground: the feed\'s bare to the green screw here, the loop\'s bare to the green screw at the switch.'],
+      cable: ['How many conductors are in that old loop? Count them.', 'The loop is a 2-wire cable: one black, one white, one bare. Both hots have to fit in it.', 'Rule (NEC 200.7(C)): in a switch loop the WHITE may carry the hot TO the switch, re-marked with black tape. Never the leg coming back to the light.'],
+      color: ['A white wire carrying the hot... how would the next electrician know?', 'Any white used as a hot gets re-marked: black tape, the taped-white wire on your bench.', 'Rule: a taped white may be the supply TO a switch, never the switched return to the light. That one\'s the black.'],
+    },
+  };
+  /* 1.5 Two Lights, One Switch: series against parallel. Two incandescent
+     lamps one after the other on 120 V split the voltage (about 60 V each)
+     and give about a tenth of their light, a dull orange glow (circuit.js
+     evaluate: bright and light, the lamp law). Side by side, each gets 120 V. */
+  const LEVEL15 = {
+    id: 15, num: '1.5', screen: 'lvl15', store: 'circuitPanic.level15', name: 'Two Lights, One Switch', goal: 'switch', par: 6, requireGround: true, colorCode: true,
+    stage: 'two', fuseX: 262,
+    form: 'Form 1-TL', next: 'lvl16', nextName: '1.6 Two Switches, Two Lights',
+    objective: 'Two lights, one switch: the switch turns BOTH lights fully on and off. Ground the switch box.',
+    components: [{ id: 'P', type: 'source' }, { id: 'S1', type: 'sp' }, { id: 'L1', type: 'bulb' }, { id: 'L2', type: 'bulb' }],
+    names: {
+      'P.hot': 'the panel HOT', 'P.neu': 'the panel NEUTRAL bar', 'P.gnd': 'the panel GROUND bar',
+      'S1.a': 'the switch\'s left BRASS screw', 'S1.b': 'the switch\'s right BRASS screw', 'S1.g': 'the switch box\'s green GROUND screw',
+      'L1.brass': 'the first light\'s BRASS screw', 'L1.silver': 'the first light\'s SILVER screw', 'L2.brass': 'the second light\'s BRASS screw', 'L2.silver': 'the second light\'s SILVER screw',
+    },
+    winText: 'Each light has its own path from the switched hot to the neutral, so each gets the full 120 volts: that\'s PARALLEL, the way every light in a house is wired. In series they\'d split it, about 60 volts each, and glow a dull orange.',
+    punch: { fewest: 'No spare wire (six will do)', colors: 'Right colours: white neutral, green ground, hot never white or green' },
+    intro: ['Two of us on one switch this time. Don\'t short-change anybody.', 'Clean board. Both of us, one switch.'],
+    hintSets: {
+      series: ['You lit us both... but look how DIM. Who\'s sharing what?', 'One after the other, we split the 120 volts: about 60 each, and a filament on 60 gives a tenth of its light.', 'Rule: lights go in PARALLEL. Each one gets its own path: switched hot to its BRASS, its SILVER straight back to the neutral.'],
+      hot: ['Two lights, and the power has to reach both of us THROUGH the switch.', 'Out of the switch, the switched hot has to get to BOTH our BRASS screws.', 'Rule: panel HOT to the switch; from the switch\'s other screw, to each light\'s BRASS (a pigtail where two wires share a screw).'],
+      neutral: ['Each of us needs a way home. Have we both got one?', 'The way home is the NEUTRAL bar, from EACH light\'s SILVER screw.', 'Rule: each light\'s SILVER screw goes back to the panel NEUTRAL. Never through the other light.'],
+    },
+  };
+  /* 1.6 Two Switches, Two Lights: one feed into a 2-gang box, a pigtail off
+     the feed's black to BOTH switches, the neutrals spliced, the grounds bonded
+     to the box. The box is Sparky Junction (owner-approved character): every
+     splice happens in his belly. A 14/2 runs from him to each light, so each
+     light's switched hot, neutral and ground ride in the same cable (NEC
+     300.3(B)); the switches ground through his steel box (404.9(B)). The feed
+     comes into the switch box, so the neutral is there (404.2(C)). */
+  const LEVEL16 = {
+    id: 16, num: '1.6', screen: 'lvl16', store: 'circuitPanic.level16', name: 'Two Switches, Two Lights', goal: 'pair', par: 9, requireGround: true, colorCode: true,
+    stage: 'sparky', noRed: true, fuseX: 262, hintVoice: 'sparky', introVoice: 'sparky', swHeads: ['Left', 'Right'],
+    form: 'Form 1-TS', next: 'level2', nextName: '1.7 Stairway Lights',
+    objective: 'Two lights, two switches: each switch runs its own light. One feed comes into the switch box. Make it up right, and ground everything metal.',
+    components: [{ id: 'P', type: 'source' }, { id: 'J', type: 'box' }, { id: 'S1', type: 'sp' }, { id: 'S2', type: 'sp' }, { id: 'L1', type: 'fixture' }, { id: 'L2', type: 'fixture' }],
+    selfGrounded: ['S1.g', 'S2.g'],
+    boxes: { 'P.hot': 'J', 'P.neu': 'J', 'P.gnd': 'J', 'J.g': 'J', 'S1.a': 'J', 'S1.b': 'J', 'S2.a': 'J', 'S2.b': 'J', 'L1.brass': 'B1', 'L1.silver': 'B1', 'L1.g': 'B1', 'L2.brass': 'B2', 'L2.silver': 'B2', 'L2.g': 'B2' },
+    boxNames: { J: 'Sparky\'s box', B1: 'the first light\'s box', B2: 'the second light\'s box' },
+    cables: [{ id: 'c1', a: 'J', b: 'B1', type: 'a 14/2', name: 'cable', conductors: ['black', 'white'] }, { id: 'c2', a: 'J', b: 'B2', type: 'a 14/2', name: 'cable', conductors: ['black', 'white'] }],
+    names: {
+      'P.hot': 'the feed\'s BLACK (the power coming in)', 'P.neu': 'the feed\'s WHITE', 'P.gnd': 'the feed\'s bare GROUND', 'J.g': 'Sparky\'s green GROUND screw',
+      'S1.a': 'the left switch\'s top BRASS screw', 'S1.b': 'the left switch\'s bottom BRASS screw', 'S2.a': 'the right switch\'s top BRASS screw', 'S2.b': 'the right switch\'s bottom BRASS screw',
+      'L1.brass': 'the first light\'s BRASS screw', 'L1.silver': 'the first light\'s SILVER screw', 'L1.g': 'the first light box\'s green GROUND screw',
+      'L2.brass': 'the second light\'s BRASS screw', 'L2.silver': 'the second light\'s SILVER screw', 'L2.g': 'the second light box\'s green GROUND screw',
+    },
+    winText: 'One feed in. Its black pigtailed to BOTH switches, each switch\'s other screw out to its own light\'s brass, the whites spliced together with the feed\'s, and every ground bonded to the box. Each light rides in its own cable with its own neutral and ground. Two circuits\' worth of lights, one splice box. Sparky approves. Barely.',
+    punch: { fewest: 'No spare wire (nine will do)', colors: 'Right colours: white neutral, green ground, hot never white or green' },
+    intro: ['Ahem. MY box. Every splice in it gets a wire nut, and every nut goes on clockwise. Carry on.', 'Back again. Clean box. Don\'t make me regret it.'],
+    hintSets: {
+      hot: ['One black comes in. Two switches want it.', 'Splice the feed\'s black to BOTH switches: a pigtail, under one nut, in my box.', 'Rule: the hot is spliced to each switch\'s supply screw. Each switch\'s other screw carries ITS light\'s switched hot.'],
+      pair: ['Flip each switch. Does each light answer to exactly one of them?', 'One switch, one light: a switch\'s second screw goes to ONE light\'s brass.', 'Rule: each light gets its own switched hot from its own switch. Nothing else switches it.'],
+      neutral: ['Two lights, one way home. Where does it start?', 'The feed\'s white, spliced in MY box with each light\'s white.', 'Rule: the neutrals are spliced together in the box: the feed\'s white to each light\'s SILVER screw.'],
+      ground: ['Three metal boxes on this job. Count the grounds.', 'The feed\'s bare goes to my green screw, and a bare runs out to each light\'s box too. The switches ground through me.', 'Rule: every ground in a box is bonded together and to the box\'s green screw; each light box gets one too.'],
+      cable: ['A wire from one light straight to the other? Through what?', 'The only cables run from MY box out to each light. Everything comes home to me.', 'Rule: each 14/2 to a light carries that light\'s switched hot (black), its neutral (white) and a bare ground. Splices happen in a box, never in the air.'],
+    },
+  };
   const LEVEL1 = {
     id: 1, num: '1.3', screen: 'level', store: 'circuitPanic.level1', name: 'Flip the Switch', goal: 'switch', par: 4, requireGround: true,
-    form: 'Form 1-SP', next: 'level2', nextName: '1.7 Stairway Lights', plate: 'PRACTICE BOARD No. 1',
+    form: 'Form 1-SP', next: 'lvl14', nextName: '1.4 Switch Loop', plate: 'PRACTICE BOARD No. 1',
     objective: 'Wire the panel, switch and bulb so the switch turns the bulb ON and OFF, and ground the switch box.',
     components: [{ id: 'P', type: 'source' }, { id: 'S1', type: 'sp' }, { id: 'L1', type: 'bulb' }],
     names: {
@@ -109,7 +223,7 @@
     ],
   };
   const LEVEL2 = {
-    id: 2, num: '1.7', screen: 'level2', store: 'circuitPanic.level2', name: 'Stairway Lights', goal: 'threeway', par: 8, requireGround: true,
+    id: 2, num: '1.7', screen: 'level2', store: 'circuitPanic.level2', name: 'Stairway Lights', goal: 'threeway', par: 8, requireGround: true, wide: true, swap: true, bonus: true, taped: true,
     form: 'Form 2-3W',
     objective: 'Wire the stair light so EITHER 3-way switch turns it on and off. Ground both switch boxes and the fixture box.',
     components: [{ id: 'P', type: 'source' }, { id: 'S1', type: 'threeway' }, { id: 'S2', type: 'threeway' }, { id: 'L1', type: 'fixture' }],
@@ -178,24 +292,27 @@
      one roomy picture: the world it shows is W x H. Tap targets are scaled back
      up so they stay the same size on screen. DX moves the right-hand strip of
      wall (the cable coil and the big hole) out to the new right edge. */
-  const KZ = ID === 2 ? 0.9 : 1, W = 1280 / KZ, H = 720 / KZ, DX = ID === 2 ? 128 : 0;
+  const WIDE = !!LEVEL.wide;
+  const KZ = WIDE ? 0.9 : 1, W = 1280 / KZ, H = 720 / KZ, DX = WIDE ? 128 : 0;
   const HIT = HIT0 / KZ, SNAP = SNAP0 / KZ;
-  const CLIP1 = ID === 2 ? 'url(#phClipW)' : 'url(#phClip)';
-  const LX = ID === 2 ? 690 : 640;
+  const CLIP1 = WIDE ? 'url(#phClipW)' : 'url(#phClip)';
+  const LX = LEVEL.lx || (WIDE ? 690 : 640);
   const OFFX = W + 90;
   /* the camera: a gentle push-in when the light comes on, a punch-in on a
      short. It holds perfectly still while a wire, a strip, a wrap or the tester
      is in hand, and toW() and the bubble layout always undo it, so a tap lands
      exactly where it looks. (cx, cy, x, y are in stage units, before KZ.) */
   const cam = { z: 1, x: 0, y: 0, cx: 640, cy: 360, pz: 1, pcx: 640, pcy: 360, until: -9, rate: 1.5, lit: false, nextPush: 0, lastShake: -9 };
+  let dofW = null; /* the baked soft back wall (GFX.dof), made the first time it's wanted */
   const unCam = (x, y) => [((x - cam.cx - cam.x) / cam.z + cam.cx) / KZ, ((y - cam.cy - cam.y) / cam.z + cam.cy) / KZ];
-  const toW = e => { const p = App.toScene(e); return unCam(p[0], p[1]); };
+  /* (measured from the frame, which the camera never moves) */
+  const toW = e => { const r = App.frame.getBoundingClientRect(); return unCam((e.clientX - r.left) * 1280 / r.width, (e.clientY - r.top) * 720 / r.height); };
   const root = el('g', { id: 'levelRoot' + ID, style: 'display:none' }, svg);
   if (KZ !== 1) root.setAttribute('transform', `scale(${KZ})`);
   const shakeG = el('g', {}, root);
   const L = {};
   /* the practice board's outline: Level 2's stairway mock-up is a little bigger */
-  const BD = ID !== 2 ? { x0: 360, y0: 118, x1: 1130, y1: 512 } : { x0: 372, y0: 112, x1: 1276, y1: 540 };
+  const BD = !WIDE ? { x0: 360, y0: 118, x1: 1130, y1: 512 } : { x0: 372, y0: 112, x1: 1276, y1: 540 };
   /* 1.1 and 1.2 have no wall switch; 1.2's switch is the chain on the lampholder */
   const CHAIN = !!LEVEL.chain, GUIDE = !!LEVEL.guide;
   /* depth, back to front: the wall and its hardware, the cables, the characters
@@ -221,7 +338,9 @@
   for (let x = 0; x <= W; x += 58) planks.push(`M${x},26 V600`);
   el('path', { d: planks.join(' '), stroke: '#2a180e', 'stroke-width': 2.5, opacity: 0.35 }, L.wall);
   for (let i = 0; i < 10; i++) el('ellipse', { cx: i % 2 ? rand(8, 50) : rand(W - 46, W - 8), cy: rand(60, 530), rx: rand(3, 6), ry: rand(6, 11), fill: 'none', stroke: '#2a180e', 'stroke-width': 1.5, opacity: 0.3 }, L.wall);
-  const lampPool = el('ellipse', { cx: LX, cy: 40, rx: 660 / KZ, ry: 620, fill: 'url(#gLampPool)' }, L.wall);
+  /* (the painted pool is live, so the baked soft wall leaves it out: it's hidden
+     whenever the GPU light is on anyway) */
+  const lampPool = el('ellipse', { cx: LX, cy: 40, rx: 660 / KZ, ry: 620, fill: 'url(#gLampPool)', 'data-nobake': 1 }, L.wall);
   el('rect', { x: -20, y: -20, width: W + 40, height: 46, fill: '#2e1c10' }, L.wall);
   el('path', { d: `M-20,26 H${W + 20}`, stroke: INK, 'stroke-width': 4 }, L.wall);
   for (let x = 40; x < W; x += 160) el('rect', { x, y: -10, width: 26, height: 48, fill: '#3a2414', stroke: INK, 'stroke-width': 3 }, L.wall);
@@ -264,11 +383,12 @@
     el('circle', { cx: x, cy: y, r: 9, fill: 'url(#gScrewSilver)', stroke: INK, 'stroke-width': 2.5 }, L.board);
     el('path', { d: `M${x - 5},${y - 3} L${x + 5},${y + 3}`, stroke: INK, 'stroke-width': 2.2, 'stroke-linecap': 'round' }, L.board);
   }
-  if (ID !== 2) {
+  if (ID === 2) drawStairs();
+  else if (!LEVEL.stage) {
     const px = ID === 1 ? 860 : 520;
     el('text', { x: px, y: 158, 'text-anchor': 'middle', 'font-family': 'Rye, Georgia, serif', 'font-size': 19, 'letter-spacing': 3, fill: '#7d4f24', opacity: 0.6 }, L.board).textContent = LEVEL.plate;
     el('path', { d: `M${px - 108},166 H${px + 108}`, stroke: '#7d4f24', 'stroke-width': 2, opacity: 0.4, 'stroke-dasharray': '10 6' }, L.board);
-  } else drawStairs();
+  }
 
   /* ---------- the bench in front, with a few things left lying about ---------- */
   el('path', { d: `M24,548 H${W - 24} L${W},600 H0 Z`, fill: 'url(#gBenchTop)', stroke: INK, 'stroke-width': 4, 'stroke-linejoin': 'round' }, L.bench);
@@ -279,7 +399,7 @@
   el('path', { d: `M0,606 H${W}`, stroke: '#c79566', 'stroke-width': 3, opacity: 0.6 }, L.bench);
   el('rect', { x: -5, y: 626, width: W + 10, height: H - 610, fill: 'url(#gBenchFront)', stroke: INK, 'stroke-width': 4 }, L.bench);
   /* the bench is painted on watercolour paper (GPU quality only) */
-  if (G) G.paper(L.bench, -20, 546, W + 40, H - 526, { flip: true, opacity: 0.85 });
+  if (G) G.paper(shakeG, -20, 546, W + 40, H - 526, { flip: true, opacity: 0.85, before: L.parts });
   /* the props keep to the left end: the rest of the bench is a clear lane for
      anyone walking on */
   const spool = el('g', { transform: 'translate(-56,0)' }, L.bench);
@@ -306,7 +426,7 @@
   for (let i = 0; i < 8; i++) el('path', { d: `M${1134 + (i % 4) * 10},${592 - Math.floor(i / 4) * 12} l5,-10 l5,10 Z`, fill: pick(['#f28c1c', '#f2d21c', '#d8342a']), stroke: BR, 'stroke-width': 1.2 }, jar);
   el('rect', { x: 1124, y: 546, width: 56, height: 10, rx: 2, fill: '#a0998a', stroke: BR, 'stroke-width': 2.5 }, jar);
   /* 1.1 and 1.2: the hand tools live in the toolbox, which takes the spool's spot */
-  if (ID >= 11) [spool, drv, pl].forEach(g => g.remove());
+  if (LEVEL.toolbox) [spool, drv, pl].forEach(g => g.remove());
 
   /* little paper labels, tacked on */
   function tag(x, y, text, rot = 0, g = L.tags) {
@@ -395,9 +515,13 @@
     'P.neu': { x: 300 + PX, y: 421 + PY, kind: 'silver', label: 'NEUTRAL', tx: 240 + PX, ty: 421 + PY, name: 'Panel NEUTRAL bar' },
     'P.gnd': { x: 300 + PX, y: 457 + PY, kind: 'green', label: 'GROUND', tx: 242 + PX, ty: 457 + PY, name: 'Panel GROUND bar' },
   };
-  let TERMS, PIG_AT, SWDEF, BULB, OUTLET = null, CHAIN_AT = null, REC = null;
+  let TERMS, PIG_AT, SWDEF, BULB, BULB2 = null, OUTLET = null, CHAIN_AT = null, REC = null;
+  /* the later Chapter 1 boards, by LEVEL.stage */
+  const STAGES = { loop: stageLoop, two: stageTwo, sparky: stageSparky };
+  let SPARKY = null;
   if (ID === 2) stage2();
-  else if (ID >= 11) stageLight();
+  else if (LEVEL.toolbox) stageLight();
+  else if (LEVEL.stage) STAGES[LEVEL.stage]();
   else {
   /* the steel device box the switch stands in */
   const box = el('g', {}, L.parts);
@@ -611,16 +735,214 @@
     ].map(([id, lx, ly, name]) => ({ id, lx, ly, name, x: OX, y: OY }));
     tag(CX + 50, 176, 'CKT 2', -2);
   }
+  /* ---------- 1.4 on: the jobs out in the house ----------
+     The power no longer starts on the panel's bars: a feed cable leaves the
+     panel and comes into a box out on the job, and its conductors hang out of
+     that box ("tails") to be spliced. Cables between boxes are drawn as real
+     NM cable stapled to the board; what's in each one is in LEVEL.cables. */
+  /* a porcelain keyless lampholder on a steel octagon box: where its screws
+     are, and where the bulb stands */
+  function octD(cx, cy, r) { let d = ''; for (let i = 0; i < 8; i++) { const a = Math.PI / 8 + (i * Math.PI) / 4; d += (i ? 'L' : 'M') + R(cx + Math.cos(a) * r) + ',' + R(cy + Math.sin(a) * r); } return d + 'Z'; }
+  function octLight(FX, TOP, hs = 0.8, o = {}) {
+    const k = hs / 0.7, OC = TOP + 52 * k, OR = 80 * k;
+    const oct = el('g', {}, L.parts);
+    el('path', { d: octD(FX + 9, OC + 11, OR + 2), fill: '#140904', opacity: 0.45, filter: 'url(#softBlur)' }, oct);
+    el('path', { d: octD(FX, OC, OR), fill: 'url(#gGalv)', stroke: INK, 'stroke-width': 5, 'stroke-linejoin': 'round' }, oct);
+    el('path', { d: octD(FX, OC, OR), fill: 'url(#spangle)' }, oct);
+    el('path', { d: octD(FX, OC, OR - 11), fill: 'none', stroke: '#f2f4f5', 'stroke-width': 2, opacity: 0.55 }, oct);
+    if (o.open) el('path', { d: octD(FX, OC + 4, OR - 20), fill: 'url(#gCabIn)', stroke: INK, 'stroke-width': 3 }, oct);
+    for (const [kx, ky] of o.knock || [[FX - 70, OC + 12], [FX + 70, OC + 12]]) { el('circle', { cx: kx, cy: ky, r: 10, fill: '#6c7074', stroke: INK, 'stroke-width': 2.5 }, oct); el('circle', { cx: kx, cy: ky, r: 6, fill: '#3a3d40' }, oct); }
+    const holder = el('g', { transform: `translate(${R(FX - 1020 * hs)},${R(TOP - 442 * hs)}) scale(${hs})` }, L.holder);
+    el('path', { d: 'M930,442 V488 Q1020,522 1110,488 V442 Z', fill: 'url(#gPorc)', stroke: INK, 'stroke-width': 5, 'stroke-linejoin': 'round' }, holder);
+    el('path', { d: 'M946,454 V484', stroke: '#ffffff', 'stroke-width': 6, opacity: 0.75, 'stroke-linecap': 'round' }, holder);
+    el('path', { d: 'M1094,452 V486', stroke: '#8f8676', 'stroke-width': 8, opacity: 0.35, 'stroke-linecap': 'round' }, holder);
+    el('ellipse', { cx: 1020, cy: 442, rx: 90, ry: 24, fill: '#f8f3e8', stroke: INK, 'stroke-width': 5 }, holder);
+    el('ellipse', { cx: 1020, cy: 442, rx: 40, ry: 11.5, fill: 'url(#gGold)', stroke: INK, 'stroke-width': 3 }, holder);
+    el('path', { d: 'M986,441 Q1020,450 1054,441 M990,436 Q1020,444 1050,436', fill: 'none', stroke: '#7a5316', 'stroke-width': 1.6, opacity: 0.8 }, holder);
+    for (const [x0, x1] of [[916, 952], [1088, 1124]]) el('rect', { x: x0, y: 454, width: x1 - x0, height: 24, rx: 4, fill: x0 < 1000 ? 'url(#gGold)' : 'url(#gSteel)', stroke: INK, 'stroke-width': 2.5 }, holder);
+    const hx = x => R(FX + (x - 1020) * hs), hy = y => R(TOP + (y - 442) * hs);
+    return { OC, OR, brass: [hx(934), hy(466)], silver: [hx(1106), hy(466)], g: [FX - 30, R(OC + 50)] };
+  }
+  /* a length of NM cable stapled to the board: cream sheath, ink edge, a
+     highlight, a staple every so often, and a connector where it enters a box */
+  function nmCable(d, staples, o = {}) {
+    const g = el('g', {}, L.parts);
+    el('path', { d, fill: 'none', stroke: '#1a0c05', 'stroke-width': 13, opacity: 0.22, transform: 'translate(5,7)', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+    el('path', { d, fill: 'none', stroke: INK, 'stroke-width': 15, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+    el('path', { d, fill: 'none', stroke: o.sheath || '#e6dcbf', 'stroke-width': 10, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, g);
+    el('path', { d, fill: 'none', stroke: '#fffaea', 'stroke-width': 2.4, opacity: 0.7, transform: 'translate(-1.2,-2.4)', 'stroke-linecap': 'round' }, g);
+    /* the printing on the jacket */
+    el('path', { d, fill: 'none', stroke: '#8a7a58', 'stroke-width': 1.4, opacity: 0.6, 'stroke-dasharray': '3 9 14 30' }, g);
+    for (const [x, y, a = 0] of staples || []) {
+      const s = el('g', { transform: `translate(${x},${y}) rotate(${a})` }, g);
+      el('path', { d: 'M-9,4 V-7 H9 V4', fill: 'none', stroke: INK, 'stroke-width': 5, 'stroke-linejoin': 'round' }, s);
+      el('path', { d: 'M-9,4 V-7 H9 V4', fill: 'none', stroke: '#c4c8cc', 'stroke-width': 2.4, 'stroke-linejoin': 'round' }, s);
+    }
+    for (const [x, y, a = 0] of o.clamps || []) {
+      const c = el('g', { transform: `translate(${x},${y}) rotate(${a})` }, g);
+      el('rect', { x: -9, y: -11, width: 18, height: 22, rx: 3, fill: 'url(#gSteel)', stroke: INK, 'stroke-width': 3 }, c);
+      el('path', { d: 'M-9,-4 H9 M-9,4 H9', stroke: INK, 'stroke-width': 1.6, opacity: 0.6 }, c);
+    }
+    if (o.tag) tag(o.tag[0], o.tag[1], o.tag[2], o.tag[3] || 0);
+    return g;
+  }
+  /* a conductor end hanging out of a box: insulation up to the stripped end */
+  const TAILCOL = { black: ['#2c2c31', '#9696a0'], white: ['#f1ead8', '#ffffff'], red: ['#c7322b', '#ff9f8a'] };
+  function drawTail(tm) {
+    const [fx, fy] = tm.from, dx = tm.x - fx, dy = tm.y - fy, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+    const bx = tm.x - ux * 13, by = tm.y - uy * 13, bend = tm.bend == null ? 0.25 : tm.bend;
+    const cx = (fx + bx) / 2 - uy * d * bend, cy = (fy + by) / 2 + ux * d * bend;
+    const path = `M${R(fx)},${R(fy)} Q${R(cx)},${R(cy)} ${R(bx)},${R(by)}`;
+    const g = el('g', {}, L.plates);
+    el('path', { d: path, fill: 'none', stroke: '#1a0c05', 'stroke-width': 9, opacity: 0.22, transform: 'translate(5,8)', 'stroke-linecap': 'round' }, g);
+    if (tm.wire === 'bare') {
+      el('path', { d: path, fill: 'none', stroke: INK, 'stroke-width': 6, 'stroke-linecap': 'round' }, g);
+      el('path', { d: path, fill: 'none', stroke: '#d98a4a', 'stroke-width': 3.2, 'stroke-linecap': 'round' }, g);
+    } else {
+      const c = TAILCOL[tm.wire] || TAILCOL.black;
+      el('path', { d: path, fill: 'none', stroke: INK, 'stroke-width': 12, 'stroke-linecap': 'round' }, g);
+      el('path', { d: path, fill: 'none', stroke: c[0], 'stroke-width': 7.5, 'stroke-linecap': 'round' }, g);
+      el('path', { d: path, fill: 'none', stroke: c[1], 'stroke-width': 2.2, opacity: 0.7, transform: 'translate(-1,-2)', 'stroke-linecap': 'round' }, g);
+    }
+    /* the bare copper end */
+    el('path', { d: `M${R(bx)},${R(by)} L${R(tm.x)},${R(tm.y)}`, stroke: INK, 'stroke-width': 6.4, 'stroke-linecap': 'round' }, g);
+    el('path', { d: `M${R(bx)},${R(by)} L${R(tm.x)},${R(tm.y)}`, stroke: '#d98a4a', 'stroke-width': 3.4, 'stroke-linecap': 'round' }, g);
+    el('path', { d: `M${R(bx)},${R(by)} L${R(tm.x)},${R(tm.y)}`, stroke: '#ffd6ae', 'stroke-width': 1.1, opacity: 0.9, transform: 'translate(-.6,-.8)' }, g);
+  }
+  /* 1.4: the switch loop. The light is up on the right, in a steel octagon box;
+     the feed comes over from the panel into the light's box; an old 2-wire
+     cable runs from there down to the switch box on the left */
+  function stageLoop() {
+    /* left to right, the way the power goes: panel, feed, the light's box,
+       the old loop, the switch */
+    const FX = 600, TOP = 292, ol = octLight(FX, TOP, 0.8);
+    /* the switch, in its steel box over on the right */
+    const SX = 960;
+    deviceBox(SX, 300, 112, 216, [[SX - 98, SX - 50, 346], [SX + 50, SX + 98, 346]], [SX + 72, 520]);
+    /* the feed: out of the panel's side, along under the top of the board,
+       and into the light's box through a connector at its left */
+    const KY = R(ol.OC + 12);
+    nmCable(`M312,196 C380,196 430,200 440,250 C448,300 470,${KY} ${FX - 78},${KY}`, [[404, 200, 20], [446, 296, 78]], { clamps: [[316, 196, 90], [FX - 76, KY, 90]], tag: [420, 160, 'FEED  14/2', -1.5] });
+    /* the old switch loop: out of the right of the light's box, up and over,
+       down into the top of the switch box */
+    nmCable(`M${FX + 78},${KY} C770,${KY + 6} 776,250 860,250 C920,250 ${SX},254 ${SX},288`, [[790, 268, 40], [904, 250, 2]], { sheath: '#d8cba6', clamps: [[FX + 76, KY, -90], [SX, 290, 0]], tag: [860, 218, 'OLD 2-WIRE LOOP', 1.5] });
+    /* the feed's three conductors hang out of the bottom of the box to be spliced */
+    const cl = [FX + 24, R(ol.OC + 36)];
+    TERMS = {
+      'P.hot': { x: FX + 104, y: R(ol.OC + 70), kind: 'tail', wire: 'black', from: cl, bend: -0.25, nut: true, name: 'Feed black (power in)' },
+      'P.neu': { x: FX + 122, y: R(ol.OC + 112), kind: 'tail', wire: 'white', from: [cl[0] + 4, cl[1] + 4], bend: -0.2, nut: true, name: 'Feed white' },
+      'P.gnd': { x: FX + 92, y: R(ol.OC + 146), kind: 'tail', wire: 'bare', from: [cl[0] + 8, cl[1] + 8], bend: -0.12, nut: true, name: 'Feed bare ground' },
+      'S1.a': { x: SX - 80, y: 346, kind: 'brass', label: 'BRASS', tx: SX - 86, ty: 392, name: 'Switch left BRASS' },
+      'S1.b': { x: SX + 80, y: 346, kind: 'brass', label: 'BRASS', tx: SX + 88, ty: 392, name: 'Switch right BRASS' },
+      'S1.g': { x: SX + 78, y: 521, kind: 'green', label: 'GROUND', tx: SX + 120, ty: 482, name: 'Switch box green GROUND' },
+      'L1.brass': { x: ol.brass[0], y: ol.brass[1], kind: 'brass', label: 'BRASS', tx: ol.brass[0] - 66, ty: ol.brass[1] - 22, name: 'Light BRASS' },
+      'L1.silver': { x: ol.silver[0], y: ol.silver[1], kind: 'silver', label: 'SILVER', tx: ol.silver[0] + 16, ty: ol.silver[1] - 54, name: 'Light SILVER' },
+      'L1.g': { x: ol.g[0], y: ol.g[1], kind: 'green', label: 'GROUND', tx: ol.g[0] - 70, ty: ol.g[1] + 34, name: 'Light box green GROUND' },
+    };
+    PIG_AT = { 'S1.a': [-0.6, 0.8], 'S1.b': [0.7, 0.7], 'S1.g': [-0.95, -0.2], 'L1.brass': [-0.8, 0.6], 'L1.silver': [0.85, 0.5], 'L1.g': [-0.8, 0.6] };
+    SWDEF = [{ id: 'S1', x: SX, y: 504, s: 0.6, labels: true, tip: [SX - 14, 356] }];
+    BULB = { x: FX, y: TOP - 2, s: 0.64, tip: [FX - 48, TOP - 136] };
+    el('text', { x: 1000, y: 168, 'text-anchor': 'middle', 'font-family': 'Rye, Georgia, serif', 'font-size': 17, 'letter-spacing': 3, fill: '#7d4f24', opacity: 0.6 }, L.board).textContent = 'PRACTICE BOARD No. 4';
+    el('text', { x: 1000, y: 190, 'text-anchor': 'middle', 'font-family': 'Special Elite, monospace', 'font-size': 13, 'letter-spacing': 3, fill: '#7d4f24', opacity: 0.6 }, L.board).textContent = 'THE OLD HOUSE';
+  }
+  /* a porcelain keyless lampholder on a turned wooden block (no metal box, so
+     nothing to ground), like 1.3's: where its screws are */
+  function blockLight(cx, Y, s) {
+    const holder = el('g', { transform: `translate(${R(cx - 1020 * s)},${R(Y - 442 * s)}) scale(${s})` }, L.holder);
+    el('ellipse', { cx: 1028, cy: 516, rx: 120, ry: 22, fill: '#140904', opacity: 0.35, filter: 'url(#softBlur)' }, holder);
+    el('path', { d: 'M912,456 V504 Q1020,544 1128,504 V456 Z', fill: '#8a5a30', stroke: INK, 'stroke-width': 4, 'stroke-linejoin': 'round' }, holder);
+    el('path', { d: 'M920,500 Q1020,534 1120,500', fill: 'none', stroke: '#c79566', 'stroke-width': 2.5, opacity: 0.6 }, holder);
+    el('ellipse', { cx: 1020, cy: 456, rx: 108, ry: 26, fill: '#a26e3e', stroke: INK, 'stroke-width': 4 }, holder);
+    el('path', { d: 'M930,442 V488 Q1020,522 1110,488 V442 Z', fill: 'url(#gPorc)', stroke: INK, 'stroke-width': 5, 'stroke-linejoin': 'round' }, holder);
+    el('path', { d: 'M946,454 V484', stroke: '#ffffff', 'stroke-width': 6, opacity: 0.75, 'stroke-linecap': 'round' }, holder);
+    el('path', { d: 'M1094,452 V486', stroke: '#8f8676', 'stroke-width': 8, opacity: 0.35, 'stroke-linecap': 'round' }, holder);
+    el('ellipse', { cx: 1020, cy: 442, rx: 90, ry: 24, fill: '#f8f3e8', stroke: INK, 'stroke-width': 5 }, holder);
+    el('ellipse', { cx: 1020, cy: 442, rx: 40, ry: 11.5, fill: 'url(#gGold)', stroke: INK, 'stroke-width': 3 }, holder);
+    el('path', { d: 'M986,441 Q1020,450 1054,441 M990,436 Q1020,444 1050,436', fill: 'none', stroke: '#7a5316', 'stroke-width': 1.6, opacity: 0.8 }, holder);
+    for (const [x0, x1] of [[916, 952], [1088, 1124]]) el('rect', { x: x0, y: 454, width: x1 - x0, height: 24, rx: 4, fill: x0 < 1000 ? 'url(#gGold)' : 'url(#gSteel)', stroke: INK, 'stroke-width': 2.5 }, holder);
+    const hx = x => R(cx + (x - 1020) * s), hy = y => R(Y + (y - 442) * s);
+    return { brass: [hx(934), hy(466)], silver: [hx(1106), hy(466)] };
+  }
+  /* 1.5: one switch, two lights. The panel's on the left as usual, the switch
+     in a steel box, and two porcelain lampholders on wooden blocks side by side */
+  function stageTwo() {
+    const SX = 540;
+    deviceBox(SX, 300, 112, 216, [[SX - 98, SX - 50, 346], [SX + 50, SX + 98, 346]], [SX + 72, 520]);
+    const a = blockLight(800, 440, 0.68), b = blockLight(1010, 440, 0.68);
+    TERMS = Object.assign({}, PANEL_TERMS, {
+      'S1.a': { x: SX - 80, y: 346, kind: 'brass', label: 'BRASS', tx: SX - 86, ty: 392, name: 'Switch left BRASS' },
+      'S1.b': { x: SX + 80, y: 346, kind: 'brass', label: 'BRASS', tx: SX + 88, ty: 392, name: 'Switch right BRASS' },
+      'S1.g': { x: SX + 78, y: 521, kind: 'green', label: 'GROUND', tx: SX + 150, ty: 520, name: 'Switch box green GROUND' },
+      'L1.brass': { x: a.brass[0], y: a.brass[1], kind: 'brass', label: 'BRASS', tx: a.brass[0] - 8, ty: a.brass[1] + 44, name: 'First light BRASS' },
+      'L1.silver': { x: a.silver[0], y: a.silver[1], kind: 'silver', label: 'SILVER', tx: a.silver[0] + 4, ty: a.silver[1] + 44, name: 'First light SILVER' },
+      'L2.brass': { x: b.brass[0], y: b.brass[1], kind: 'brass', label: 'BRASS', tx: b.brass[0] - 4, ty: b.brass[1] + 44, name: 'Second light BRASS' },
+      'L2.silver': { x: b.silver[0], y: b.silver[1], kind: 'silver', label: 'SILVER', tx: b.silver[0] + 6, ty: b.silver[1] + 44, name: 'Second light SILVER' },
+    });
+    PIG_AT = { 'P.hot': [0.95, 0.55], 'P.neu': [0.95, 0.3], 'P.gnd': [0.95, 0.35], 'S1.a': [-0.6, 0.8], 'S1.b': [0.7, 0.7], 'S1.g': [0.95, -0.2], 'L1.brass': [-0.5, -0.85], 'L1.silver': [0.4, -0.9], 'L2.brass': [-0.4, -0.9], 'L2.silver': [0.5, -0.85] };
+    SWDEF = [{ id: 'S1', x: SX, y: 504, s: 0.6, labels: true, tip: [SX - 14, 356] }];
+    BULB = { x: 800, y: 438, s: 0.66, tip: [752, 300] };
+    BULB2 = { x: 1010, y: 438, s: 0.66, tip: [962, 300] };
+    el('text', { x: 905, y: 168, 'text-anchor': 'middle', 'font-family': 'Rye, Georgia, serif', 'font-size': 17, 'letter-spacing': 3, fill: '#7d4f24', opacity: 0.6 }, L.board).textContent = 'PRACTICE BOARD No. 5';
+    el('text', { x: 905, y: 190, 'text-anchor': 'middle', 'font-family': 'Special Elite, monospace', 'font-size': 13, 'letter-spacing': 3, fill: '#7d4f24', opacity: 0.6 }, L.board).textContent = 'TWO LIGHTS, ONE SWITCH';
+  }
+  /* 1.6: Sparky Junction stands on the bench against the board, the feed
+     coming into his left side, both switches standing in his gangs and the
+     splices in his open belly; a 14/2 runs from him to each light */
+  function stageSparky() {
+    const SXC = 535;
+    SPARKY = { x: SXC, y: 590, s: 1 };
+    /* what shows through his openings: the inside of a steel box */
+    const inside = el('g', {}, L.parts);
+    el('rect', { x: SXC - 146, y: 280, width: 292, height: 228, rx: 8, fill: 'url(#gCabIn)', stroke: INK, 'stroke-width': 3 }, inside);
+    el('path', { d: `M${SXC - 140},290 H${SXC + 140}`, stroke: '#000', 'stroke-width': 8, opacity: 0.3 }, inside);
+    for (const [kx, ky] of [[SXC - 100, 360], [SXC, 360], [SXC + 100, 360], [SXC - 40, 470], [SXC + 60, 470]]) { el('circle', { cx: kx, cy: ky, r: 13, fill: 'none', stroke: '#55595c', 'stroke-width': 2.4 }, inside); el('circle', { cx: kx, cy: ky, r: 7, fill: 'none', stroke: '#55595c', 'stroke-width': 2 }, inside); }
+    /* the green screw's welded tab in his belly */
+    el('path', { d: `M${SXC + 86},468 H${SXC + 124} V498 H${SXC + 86} Z`, fill: 'url(#gGalv)', stroke: INK, 'stroke-width': 2.6 }, inside);
+    const a = octLight(800, 300, 0.7), b = octLight(1030, 300, 0.7);
+    /* the feed, down the left edge of the board into his side */
+    nmCable(`M312,196 C350,196 372,204 372,244 V440 Q372,478 ${SXC - 150},478`, [[372, 300, 90], [372, 400, 90]], { clamps: [[SXC - 146, 478, 90]], tag: [430, 160, 'FEED  14/2', -1.5] });
+    /* a 14/2 out of his right side to each light */
+    nmCable(`M${SXC + 150},330 C${SXC + 178},330 704,364 ${800 - 72},364`, [], { clamps: [[SXC + 147, 330, 90], [800 - 70, 364, 90]], tag: [660, 252, '14/2', 2] });
+    nmCable(`M${SXC + 150},470 C760,476 900,486 980,476 C1010,472 1030,454 1030,${R(b.OC + 74)}`, [[820, 480, 6], [930, 482, -4]], { clamps: [[SXC + 147, 470, 90], [1030, R(b.OC + 72), 0]], tag: [880, 508, '14/2', -1.5] });
+    const cl = [SXC - 132, 478];
+    TERMS = {
+      'P.hot': { x: SXC - 88, y: 468, kind: 'tail', wire: 'black', from: cl, bend: 0.2, nut: true, name: 'Feed black (power in)' },
+      'P.neu': { x: SXC - 50, y: 488, kind: 'tail', wire: 'white', from: [cl[0] + 2, cl[1] + 4], bend: -0.15, nut: true, name: 'Feed white' },
+      'P.gnd': { x: SXC - 12, y: 470, kind: 'tail', wire: 'bare', from: [cl[0] + 4, cl[1] + 8], bend: 0.12, nut: true, name: 'Feed bare ground' },
+      'J.g': { x: SXC + 105, y: 483, kind: 'green', label: 'GROUND', tx: SXC + 104, ty: 532, name: 'Sparky\'s green GROUND screw' },
+      'S1.a': { x: SXC - 121, y: 318, kind: 'brass', label: 'BRASS', tx: 350, ty: 318, name: 'Left switch top BRASS' },
+      'S1.b': { x: SXC - 121, y: 404, kind: 'brass', label: 'BRASS', tx: 350, ty: 404, name: 'Left switch bottom BRASS' },
+      'S2.a': { x: SXC + 121, y: 318, kind: 'brass', label: 'BRASS', tx: SXC + 190, ty: 300, name: 'Right switch top BRASS' },
+      'S2.b': { x: SXC + 121, y: 404, kind: 'brass', label: 'BRASS', tx: SXC + 190, ty: 420, name: 'Right switch bottom BRASS' },
+      'L1.brass': { x: a.brass[0], y: a.brass[1], kind: 'brass', label: 'BRASS', tx: a.brass[0] - 52, ty: a.brass[1] - 30, name: 'First light BRASS' },
+      'L1.silver': { x: a.silver[0], y: a.silver[1], kind: 'silver', label: 'SILVER', tx: a.silver[0] + 46, ty: a.silver[1] - 18, name: 'First light SILVER' },
+      'L1.g': { x: a.g[0], y: a.g[1], kind: 'green', label: 'GROUND', tx: a.g[0], ty: a.g[1] + 48, name: 'First light box green GROUND' },
+      'L2.brass': { x: b.brass[0], y: b.brass[1], kind: 'brass', label: 'BRASS', tx: b.brass[0] - 30, ty: b.brass[1] - 48, name: 'Second light BRASS' },
+      'L2.silver': { x: b.silver[0], y: b.silver[1], kind: 'silver', label: 'SILVER', tx: b.silver[0] + 4, ty: b.silver[1] - 48, name: 'Second light SILVER' },
+      'L2.g': { x: b.g[0], y: b.g[1], kind: 'green', label: 'GROUND', tx: b.g[0] + 60, ty: b.g[1] + 40, name: 'Second light box green GROUND' },
+    };
+    PIG_AT = { 'J.g': [-0.98, 0.1], 'S1.a': [0.5, 0.85], 'S1.b': [0.5, 0.85], 'S2.a': [-0.5, 0.85], 'S2.b': [-0.5, 0.85], 'L1.brass': [-0.8, 0.6], 'L1.silver': [0.8, 0.6], 'L1.g': [-0.8, 0.6], 'L2.brass': [-0.8, 0.6], 'L2.silver': [0.8, 0.6], 'L2.g': [0.8, 0.6] };
+    SWDEF = [{ id: 'S1', x: SXC - 66, y: 436, s: 0.48, labels: false, tip: [SXC - 80, 330] }, { id: 'S2', x: SXC + 66, y: 436, s: 0.48, labels: false, tip: [SXC + 52, 330] }];
+    BULB = { x: 800, y: 298, s: 0.58, tip: [758, 170] };
+    BULB2 = { x: 1030, y: 298, s: 0.58, tip: [988, 170] };
+  }
   const fillOf = { brass: 'url(#gScrewBrass)', silver: 'url(#gScrewSilver)', dark: 'url(#gScrewDark)', green: 'url(#gScrewGreen)' };
   for (const [id, tm] of Object.entries(TERMS)) {
-    tag(tm.tx, tm.ty, tm.label, id.charCodeAt(3) % 2 ? -2.5 : 2);
-    el('ellipse', { cx: tm.x + 2.5, cy: tm.y + 4, rx: 17, ry: 15, fill: '#1a0c05', opacity: 0.35 }, L.plates);
-    el('circle', { cx: tm.x, cy: tm.y, r: 16, fill: fillOf[tm.kind === 'dark' ? 'brass' : tm.kind === 'green' ? 'silver' : tm.kind], stroke: INK, 'stroke-width': 2.5 }, L.plates);
-    const g = el('g', { class: 'term', 'data-term': id, tabindex: 0, role: 'button', 'aria-label': `${tm.name} terminal` }, L.terms);
+    if (tm.label) tag(tm.tx, tm.ty, tm.label, id.charCodeAt(3) % 2 ? -2.5 : 2);
+    const g = el('g', { class: 'term', 'data-term': id, tabindex: 0, role: 'button', 'aria-label': `${tm.name} ${tm.kind === 'tail' ? '(a conductor end, spliced with a wire nut)' : tm.kind === 'splice' ? '(a splice: wire nut)' : 'terminal'}` }, L.terms);
     tm.ring = el('circle', { cx: tm.x, cy: tm.y, r: 23, fill: 'none', stroke: '#ffe27a', 'stroke-width': 4, opacity: 0 }, g);
-    el('circle', { cx: tm.x, cy: tm.y, r: 11.5, fill: fillOf[tm.kind], stroke: INK, 'stroke-width': 3.2 }, L.heads);
-    tm.slot = el('path', { d: 'M-7,0 H7', stroke: INK, 'stroke-width': 2.8, 'stroke-linecap': 'round' }, L.heads);
-    el('path', { d: `M${tm.x - 7},${tm.y - 4} A8,8 0 0,1 ${tm.x - 1},${tm.y - 8}`, fill: 'none', stroke: '#fff', 'stroke-width': 1.8, opacity: 0.85, 'stroke-linecap': 'round' }, L.heads);
+    if (tm.kind === 'tail') drawTail(tm);
+    else if (tm.kind === 'splice') {
+      /* an empty spot in the box where conductors can be spliced */
+      el('circle', { cx: tm.x, cy: tm.y, r: 13, fill: '#1a0c05', opacity: 0.25 }, L.plates);
+      el('circle', { cx: tm.x, cy: tm.y, r: 13, fill: 'none', stroke: '#e8c79a', 'stroke-width': 2, opacity: 0.55, 'stroke-dasharray': '4 4' }, L.plates);
+    } else {
+      el('ellipse', { cx: tm.x + 2.5, cy: tm.y + 4, rx: 17, ry: 15, fill: '#1a0c05', opacity: 0.35 }, L.plates);
+      el('circle', { cx: tm.x, cy: tm.y, r: 16, fill: fillOf[tm.kind === 'dark' ? 'brass' : tm.kind === 'green' ? 'silver' : tm.kind], stroke: INK, 'stroke-width': 2.5 }, L.plates);
+      el('circle', { cx: tm.x, cy: tm.y, r: 11.5, fill: fillOf[tm.kind], stroke: INK, 'stroke-width': 3.2 }, L.heads);
+      tm.slot = el('path', { d: 'M-7,0 H7', stroke: INK, 'stroke-width': 2.8, 'stroke-linecap': 'round' }, L.heads);
+      el('path', { d: `M${tm.x - 7},${tm.y - 4} A8,8 0 0,1 ${tm.x - 1},${tm.y - 8}`, fill: 'none', stroke: '#fff', 'stroke-width': 1.8, opacity: 0.85, 'stroke-linecap': 'round' }, L.heads);
+    }
     el('circle', { cx: tm.x, cy: tm.y, r: HIT, fill: 'transparent', class: 'hit' }, g);
     tm.g = g; tm.rot = (id.length * 37) % 180 - 60; tm.spin = -9; tm.spinDir = 1;
   }
@@ -636,8 +958,8 @@
   }
   /* whose screw is it: a switch's id ('S1', 'S2'), 'bulb' or 'panel' */
   const ownerOf = id => { const c = id.split('.')[0]; return c === 'L1' ? 'bulb' : c === 'P' ? 'panel' : c; };
-  const isSw = who => who !== 'bulb' && who !== 'panel' && who !== 'insp' && who !== 'fuse';
-  const talker = id => (isSw(ownerOf(id)) ? ownerOf(id) : 'bulb');
+  const isSw = who => SWS.some(s => s.id === who);
+  const talker = id => (isSw(ownerOf(id)) ? ownerOf(id) : lampOf(id) && lampOf(id).id === 'L2' ? 'L2' : 'bulb');
 
   /* ---------- the cast ---------- */
   const scene = { defs: App.defs, layer: L.cast, get boil() { return App.boil; }, lamps: [LX], get dark() { return now > ev.black0 && now < ev.black1; } };
@@ -645,6 +967,9 @@
      UP (state 0) and DOWN (state 1) */
   const swType = id => LEVEL.components.find(c => c.id === id).type;
   const leverOf = (id, s) => (swType(id) === 'sp' ? (s ? 1 : -1) : (s ? -1 : 1));
+  /* 1.6: Sparky Junction goes on first, so the switches stand in front of him */
+  const sparky = SPARKY ? T.makeJunction(scene, SPARKY.x, SPARKY.y, SPARKY.s) : null;
+  if (sparky) sparky.root.setAttribute('class', 'toon clicky');
   const SWS = SWDEF.map(d => Object.assign({ toon: T.makeSwitch(scene, d.x, d.y, d.s, { labels: d.labels, pose: { lever: leverOf(d.id, 0) } }) }, d));
   const swT = id => (SWS.find(s => s.id === id) || SWS[0]).toon;
   const sw = SWS[0] ? SWS[0].toon : null;
@@ -652,6 +977,18 @@
   const outlet = OUTLET ? T.makeOutlet(scene, OUTLET.x, OUTLET.y, OUTLET.s, { probe: true }) : null;
   if (outlet) { outlet.root.setAttribute('class', 'toon clicky'); Object.assign(outlet.cfg.life, { breath: 3.1, bounce: 4, beatMul: 0.73, beatOffset: 0.4, sway: 3.4, lean: 2.4, nervous: 0.2 }); }
   const bulb = T.makeBulb(scene, BULB.x, BULB.y, BULB.s);
+  /* jobs with two lights: the second is another bulb, with his own temper
+     (LAMPS: every light on the board, L1 the hero first) */
+  const bulb2 = BULB2 ? T.makeBulb(scene, BULB2.x, BULB2.y, BULB2.s) : null;
+  const LAMPS = [{ id: 'L1', t: bulb, def: BULB }].concat(bulb2 ? [{ id: 'L2', t: bulb2, def: BULB2 }] : []);
+  for (const l of LAMPS) { l.t.lampId = l.id; l.t.lit = 0; l.t.light = 0; }
+  const lampOf = id => (LAMPS.find(l => l.id === String(id).split('.')[0]) || null);
+  if (bulb2) {
+    bulb2.root.setAttribute('class', 'toon clicky');
+    /* the second bulb: slow, heavy-lidded and unbothered, until he isn't */
+    Object.assign(bulb2.cfg.life, { breath: 4.4, bounce: 2, beatMul: 0.67, beatOffset: 0.55, sway: 1.4, lean: 1.6, nervous: 0.12 });
+    Object.assign(bulb2.base, { lid: 0.42, browTilt: 0.2, browRaise: 0.1, pupil: 0.9, mouthOpen: 0.15 });
+  }
   /* 1.2: the beaded pull chain hanging off the lampholder, with a brass pull */
   let chainG = null, chainBeads = null, chainPullG = null;
   if (CHAIN_AT) {
@@ -685,8 +1022,8 @@
   /* Level 2's heckler: the old glass fuse from the menu, retired to the bench
      under the panel, who remembers when HE was the one who stopped the fire */
   let fuse = null;
-  if (ID === 2 || ID >= 11) {
-    fuse = T.makeFuse({ defs: App.defs, layer: L.fore, get boil() { return App.boil; }, lamps: [LX], get dark() { return now > ev.black0 && now < ev.black1; } }, ID === 2 ? 236 : 266, 594, 0.55);
+  if (ID !== 1) {
+    fuse = T.makeFuse({ defs: App.defs, layer: L.fore, get boil() { return App.boil; }, lamps: [LX], get dark() { return now > ev.black0 && now < ev.black1; } }, LEVEL.fuseX || (ID === 2 ? 236 : 266), 594, 0.55);
     Object.assign(fuse.cfg.life, { breath: 1.5, bounce: 3, beatMul: 1.31, beatOffset: 0.85, sway: 2, lean: 3, nervous: 0.3 });
     fuse.root.setAttribute('class', 'toon clicky');
     L.fore.insertBefore(fuse.root, inspWrap);
@@ -696,7 +1033,7 @@
      take the tester out; put it back and the lid drops shut. The old fuse likes
      to lean on it, fingers over the rim... */
   let TB = null;
-  if (ID >= 11) {
+  if (LEVEL.toolbox) {
     TB = { x0: 50, x1: 206, rim: 548, hinge: [48, 548], len: 160, ang: 0, vel: 0, want: 0, peek: false, closeAt: -9, pinch: -9, ouch: -9, bitten: false, shy: -9, prank: -9, prankAt: 1e9 };
     const body = el('g', { class: 'clicky toolbox', role: 'button', tabindex: 0, 'aria-label': 'Toolbox: take out the tester, or put it back (T)' }, L.bench);
     el('ellipse', { cx: 128, cy: 596, rx: 88, ry: 7, fill: '#1a0c05', opacity: 0.4 }, body);
@@ -828,7 +1165,7 @@
   ph.root.style.cursor = 'pointer';
   const particles = new Particles(L.fx);
   /* ...and so are the wall and the practice board, over everything built on them */
-  if (G) G.paper(L.board, -20, -20, W + 40, 620);
+  if (G) G.paper(shakeG, -20, -20, W + 40, 620, { before: L.bench });
 
   /* ---------- the shop lamp and the light it throws ---------- */
   const lamp = { g: el('g', {}, L.lamp), coneG: el('g', { style: 'mix-blend-mode:screen', opacity: 0.85 }, L.light), th: 0.02, w: 0 };
@@ -840,9 +1177,11 @@
   lamp.cone = el('path', { d: 'M-40,72 L-470,500 L470,500 L40,72 Z', fill: 'url(#gCone)' }, lamp.coneG);
   const benchPool = el('ellipse', { cx: LX, cy: 574, rx: 470 / KZ, ry: 42, fill: 'url(#gBenchPool)', style: 'mix-blend-mode:screen' }, L.light);
   const bulbGlow = el('ellipse', { rx: 330, ry: 270, fill: 'url(#gWarm)', opacity: 0, style: 'mix-blend-mode:screen' }, L.light);
+  /* (each light has its own painted pool for the classic look) */
+  for (const l of LAMPS) l.glowEl = l.t === bulb ? bulbGlow : el('ellipse', { rx: 300, ry: 250, fill: 'url(#gWarm)', opacity: 0, style: 'mix-blend-mode:screen' }, L.light);
   const vign = el('rect', { x: -20, y: -20, width: W + 40, height: H + 40, fill: 'url(#gRoomDark)' }, L.dark);
   const darkRect = el('rect', { x: -20, y: -20, width: W + 40, height: H + 40, fill: '#050308', opacity: 0 }, L.dark);
-  const darkEyes = [...SWS.map(s => s.toon), bulb, ph].concat(fuse ? [fuse] : [], outlet ? [outlet] : []).map(c => {
+  const darkEyes = [...SWS.map(s => s.toon), bulb, ph].concat(bulb2 ? [bulb2] : [], sparky ? [sparky] : [], fuse ? [fuse] : [], outlet ? [outlet] : []).map(c => {
     const g = el('g', { opacity: 0 }, L.dark);
     const evil = c === ph;
     return { c, g, e: [0, 1].map(() => ({ w: el('ellipse', evil ? { fill: '#fff2a0', opacity: 0.25, filter: 'url(#softBlur)' } : { fill: '#f4ecd8' }, g), p: el('ellipse', { fill: evil ? '#fff8d8' : '#0a0606' }, g) })) };
@@ -872,7 +1211,7 @@
      and as close to the speaker as that allows, with the tail pointing at him.
      Everything is measured live, so a phone's bigger HUD text is avoided too,
      and the words grow on a small screen so they stay readable. */
-  const speakerOf = who => { const s = SWS.find(q => q.id === who); return s ? s.toon : who === 'insp' ? insp : who === 'fuse' ? fuse : who === 'outlet' ? outlet : bulb; };
+  const speakerOf = who => { const s = SWS.find(q => q.id === who); return s ? s.toon : who === 'insp' ? insp : who === 'fuse' ? fuse : who === 'outlet' ? outlet : who === 'L2' && bulb2 ? bulb2 : who === 'sparky' && sparky ? sparky : bulb; };
   const shown = c => c && c.root.style.display !== 'none';
   function hudRects(fr) {
     const k = 1280 / fr.width;
@@ -892,7 +1231,7 @@
   };
   function layoutBubble() {
     if (!bubS.text) return;
-    const fr = svg.getBoundingClientRect();
+    const fr = App.frame.getBoundingClientRect(); /* (the frame: the camera never moves it) */
     const px = fr.width ? (fr.width / 1280) * KZ : 1;
     const fs0 = clamp(12 / px, 17, 24);
     const husk = bubS.who === 'husk', me = husk ? bulb : speakerOf(bubS.who);
@@ -901,7 +1240,7 @@
     const hr = hr0 + 6;
     /* what the bubble must not cover */
     const circles = mine.map(([x, y, r]) => [x, y, r + 4, 3]);
-    for (const c of [bulb, fuse, outlet, insp, ph, ...SWS.map(s => s.toon)]) {
+    for (const c of [bulb, bulb2, sparky, fuse, outlet, insp, ph, ...SWS.map(s => s.toon)]) {
       if (!c || c === me || !shown(c)) continue;
       if (c === ph) { circles.push([...ph.facePos(), 50, 4]); continue; }
       /* their faces above all, but not their bodies either if it can be helped */
@@ -1100,7 +1439,9 @@
   const pig = {};
   const countAt = id => st.wires.filter(w => w.a === id || w.b === id).length;
   const pinOf = id => (pig[id] ? pig[id].J : [TERMS[id].x, TERMS[id].y]);
-  const endOf = id => (pig[id] ? 'nut' : TERMS[id]);
+  /* a conductor end or a splice has no screw: its wires always meet in a nut */
+  const endOf = id => (pig[id] ? 'nut' : TERMS[id].nut ? 'free' : TERMS[id]);
+  const nutAt = id => (TERMS[id].nut ? 1 : 2);
   function syncWires(fromRope) {
     for (const [w, v] of vis) if (!st.wires.includes(w)) { removeEls(v.o); vis.delete(w); }
     for (const w of st.wires) {
@@ -1117,8 +1458,8 @@
       vis.set(w, { rope, o, hot: false, current: false, dir: 1 });
     }
     /* a doubled screw keeps its pigtail; a screw back down to one wire loses it */
-    for (const id of Object.keys(pig)) if (countAt(id) < 2) dropPigtail(id);
-    for (const id of Object.keys(TERMS)) if (countAt(id) >= 2 && !pig[id]) makePigtail(id, null, true);
+    for (const id of Object.keys(pig)) if (countAt(id) < nutAt(id)) dropPigtail(id);
+    for (const id of Object.keys(TERMS)) if (countAt(id) >= nutAt(id) && !pig[id]) makePigtail(id, null, true);
     for (const [w, v] of vis) { const [ax, ay] = pinOf(w.a), [bx, by] = pinOf(w.b); fitRope(v.rope, ax, ay, bx, by); wake(v.rope); v.dirty = true; }
   }
   function shakeWires(k) {
@@ -1127,7 +1468,7 @@
       for (const q of r.pts) { q.px -= rand(-5, 5) * k; q.py -= rand(-8, 3) * k; }
     }
   }
-  const allRopes = () => [...[...vis.values()].map(v => v.rope), ...Object.values(pig).map(p => p.rope)];
+  const allRopes = () => [...[...vis.values()].map(v => v.rope), ...Object.values(pig).map(p => p.rope).filter(Boolean)];
 
   /* F. the pigtail: a short jumper from the screw to a wire nut, and every
      conductor for that screw twisted together inside the nut */
@@ -1144,13 +1485,17 @@
     const t = TERMS[id];
     if (!pig[id]) {
       /* each screw has an open patch of board beside it where the nut can sit,
-         out of everyone's way */
-      const [ux, uy] = PIG_AT[id] || pigDir(id, extra);
+         out of everyone's way; a conductor end or a splice takes its nut right
+         where it is (no jumper) */
+      const [ux, uy] = t.nut ? [0, 0] : PIG_AT[id] || pigDir(id, extra);
       const J = [t.x + ux * 58, t.y + uy * 58];
       const first = st.wires.find(w => w.a === id || w.b === id);
-      const rope = makeRope(t.x, t.y, J[0], J[1], 7);
-      fitRope(rope, t.x, t.y, J[0], J[1], 10);
-      const o = wireEls(L.wires, first ? first.color : st.color, L.wshadow, false);
+      let rope = null, o = null;
+      if (!t.nut) {
+        rope = makeRope(t.x, t.y, J[0], J[1], 7);
+        fitRope(rope, t.x, t.y, J[0], J[1], 10);
+        o = wireEls(L.wires, first ? first.color : st.color, L.wshadow, false);
+      }
       const nut = el('g', { class: 'nut clicky', role: 'button', tabindex: 0, 'aria-label': 'Wire nut: twist it on' }, L.nuts);
       el('ellipse', { cx: 0, cy: 3, rx: 16, ry: 5, fill: '#1a0c05', opacity: 0.3, transform: 'translate(4,8)' }, nut);
       const body = el('g', {}, nut);
@@ -1173,7 +1518,8 @@
   function dropPigtail(id) {
     const pg = pig[id];
     if (!pg) return;
-    removeEls(pg.o); pg.nut.remove();
+    if (pg.o) removeEls(pg.o);
+    pg.nut.remove();
     delete pig[id];
   }
   function twistClick(id) {
@@ -1182,10 +1528,14 @@
     pg.twists++; pg.turn = now;
     A.sfx.ratchet();
     particles.spark(pg.J[0], pg.J[1] - 14, 2, 0.2);
+    /* a splice in Sparky's box: he supervises every turn */
+    const hisBox = sparky && (LEVEL.boxes || {})[id] === 'J';
+    if (hisBox) sparky.attn = pg.J.slice();
     if (pg.twists >= 3) {
       pg.snug = true;
       particles.bonk(pg.J[0], pg.J[1] - 12, 0.8);
       A.sfx.pop();
+      if (hisBox) { const m = SPK.nod(); sparky.play(m.k, m.d, { slot: 'small' }); once('sparkyNut', () => setTimeout(() => say('Clockwise. Like a gentleman.', 2.6, 'sparky'), 400)); }
       const r = pg.res; pg.res = null; r(true);
     }
   }
@@ -1193,7 +1543,8 @@
     return new Promise(res => {
       const pg = pig[id];
       pg.res = res;
-      once('pigtail', () => say('Two wires on one screw? On the job you pigtail them. Twist the wire nut on: click it three times!', 7, talker(id)));
+      if (TERMS[id].nut) once('splice', () => say('Splices get a wire nut. Twist it on: click it three times!', 5, talker(id)));
+      else once('pigtail', () => say('Two wires on one screw? On the job you pigtail them. Twist the wire nut on: click it three times!', 7, talker(id)));
       status('Twist the wire nut on: click it (or press Enter) three times, clockwise.');
       try { pg.nut.focus({ preventScroll: true }); } catch (e) { /* no focus */ }
     });
@@ -1210,9 +1561,10 @@
       v.dir = Math.abs(res.V[w.a] || 0) >= Math.abs(res.V[w.b] || 0) ? 1 : -1;
     });
     for (const [id, pg] of Object.entries(pig)) { const v = res.V[id]; pg.hot = v != null && Math.abs(v) > 1; }
-    const br = res.bulbs.L1 ? res.bulbs.L1.bright : 0;
-    bulb.lit = st.blown ? 0 : br;
-    A.sfx.hum(bulb.lit > 0.5 && App.current === SCREEN);
+    /* lit: the share of 120 V across each filament; light: what that gives
+       (circuit.js, the lamp law: half the voltage is about a tenth the light) */
+    for (const l of LAMPS) { const b = res.bulbs[l.id]; l.t.lit = st.blown || !b ? 0 : b.bright; l.t.light = st.blown || !b ? 0 : b.light; }
+    A.sfx.hum(LAMPS.some(l => l.t.lit > 0.5) && App.current === SCREEN);
     /* probes left on across a breaker flip: the neon follows the circuit */
     if (st.tester && tester.a && tester.b) tester.glow = C.neonBetween(probeV(tester.a.id), probeV(tester.b.id));
     if (res.short && !st.faultLock && !st.inspecting) deadShort(res);
@@ -1279,33 +1631,38 @@
     tg.sy += 0.04; tg.pupil = 0.55; tg.shake += 0.7; tg.browRaise = 1; tg.lid = 0; tg.sweat = 1;
     d.mouth = 'grit'; tg.mouthOpen = 0.35;
   };
-  bulb.brain = (t, dt, tg, d) => {
+  const lampBrain = me => (t, dt, tg, d) => {
     /* blown: just a scorched base, his face peering over the broken collar */
-    if (st.burnt) {
+    if (me.burnt) {
       tg.faceY = 72; tg.glow = 0; tg.lid = Math.max(tg.lid, 0.5); tg.pupil = 0.45; tg.browTilt = 1.2; d.mouth = 'worry'; tg.mouthOpen = 0.35;
       tg.lookY = 0.4; tg.shake += 0.6; tg.sy -= 0.06;
       return;
     }
-    const lit = bulb.lit || 0;
+    const lit = me.lit || 0;
     if (lit > 0.9) {
       tg.glow = 1; d.mouth = 'smile'; tg.mouthOpen = 0.55; tg.lowLid = 0.35; tg.browTilt = -0.3; tg.browRaise = 0.6; tg.pupil = 1;
       tg.lhx = -50 + 6 * Math.sin(t * 6); tg.lhy = -40; tg.rhx = 50 - 6 * Math.sin(t * 6); tg.rhy = -40; d.lg = 'palm'; d.rg = 'palm'; tg.knee = 0.2; tg.shake = 0;
       tg.lroll = 0.3 * Math.sin(t * 3); tg.rroll = -0.3 * Math.sin(t * 3 + 1);
     } else if (lit > 0.05) {
-      tg.glow = lit; d.mouth = 'worry'; tg.lid = 0.5;
+      /* part of his voltage: the filament only gets to a dull orange (the lamp
+         law, from circuit.js), and he strains for every lumen */
+      tg.glow = 0.1 + 0.9 * (me.light || 0); d.mouth = 'grit'; tg.mouthOpen = 0.35; tg.lid = 0.45; tg.browTilt = 1.1; tg.browRaise = 0.5; tg.pupil = 0.7;
+      tg.shake += 0.7; tg.sweat = 0.7; tg.sy -= 0.04; tg.sx += 0.02;
+      tg.lhx = -30; tg.lhy = 18; tg.rhx = 30; tg.rhy = 18; d.lg = 'fist'; d.rg = 'fist';
     } else {
       /* fretting hands that keep turning over */
       tg.lroll = 0.5 + 0.4 * Math.sin(t * 1.6); tg.rroll = -0.5 - 0.4 * Math.sin(t * 1.6 + 1.1);
       tg.lhy += 2 * Math.sin(t * 5); tg.rhy += 2 * Math.sin(t * 5 + 1.3);
       if (st.power) { tg.shake += 0.9; tg.sweat = 1; tg.pupil = 0.6; tg.browRaise = 1; d.mouth = 'grit'; tg.mouthOpen = 0.3; }
-      hoverStiff(bulb, tg, d);
+      hoverStiff(me, tg, d);
     }
     /* the Phantom's fingers creeping close: lean well away and don't look */
-    if (PH.st === 'creep' || PH.st === 'grab') {
+    if (me === bulb && (PH.st === 'creep' || PH.st === 'grab')) {
       tg.hipX -= 16; tg.lean -= 9; tg.turn = -0.5; tg.sweat = 1; tg.shake += 1.2; tg.pupil = 0.4; tg.browRaise = 1.4; d.mouth = 'gasp'; tg.mouthOpen = 0.6;
       bulb.attn = ph.facePos();
     }
   };
+  for (const l of LAMPS) l.t.brain = lampBrain(l.t);
   for (const s of SWS) {
     const me = s.toon, other = SWS.find(o => o !== s);
     s.glare = -9;
@@ -1366,6 +1723,47 @@
     };
   }
 
+  /* ---------- Sparky Junction (1.6) ----------
+     His box is planted (the switches stand in it and the splices are in his
+     belly), so everything he does is in his face plate, his brows, his tie,
+     his monocle and his gloves. He has his own slow, put-upon rhythm, and his
+     own fidgets: a polish of the monocle, a tug at the tie, drummed fingers, a
+     tapping foot. Hands that reach across him come in front ('front!'). */
+  const SPK = {
+    grump: () => ({ d: 1.7, k: [[0.1, { lhx: 30, lhy: 76, rhx: -30, rhy: 76, lg: 'fist', rg: 'fist', lroll: 0.5, rroll: -0.5, browTilt: -1.4, browRaise: 0, mouth: 'grit', mouthOpen: 0.5, turn: 0.25, lookX: 0.3, shake: 0.5 }], [0.45, { mouthOpen: 0.2 }], [0.8, { turn: 0 }]] }),
+    polish: () => ({ d: 1.7, k: [[0.15, { rhx: -98, rhy: -38, rg: 'fist', rroll: 0.6, rLayer: 'front!', lid: 0.6, browTilt: 0.2, lookY: -0.3 }], [0.3, { rhx: -92, rhy: -46 }], [0.45, { rhx: -100, rhy: -34 }], [0.6, { rhx: -93, rhy: -44 }], [0.85, { rhx: 16, rhy: 168, lid: 0.32 }]] }),
+    tie: () => ({ d: 1.5, k: [[0.15, { lhx: 122, lhy: 16, rhx: -122, rhy: 16, lg: 'fist', rg: 'fist', lLayer: 'front!', rLayer: 'front!', lookY: 0.8, browTilt: 0.6, mouth: 'flat' }], [0.4, { lhx: 118, lhy: 20, rhx: -126, rhy: 12 }], [0.62, { lhx: 126, lhy: 12, rhx: -118, rhy: 20 }], [0.9, { lhx: -16, lhy: 168, rhx: 16, rhy: 168, lookY: 0 }]] }),
+    drum: () => ({ d: 1.6, k: [[0.1, { rhx: 26, rhy: 118, rg: 'palm', rroll: 1.2, lookX: 0.6, browTilt: -0.8 }], [0.22, { rhy: 110 }], [0.32, { rhy: 118 }], [0.42, { rhy: 110 }], [0.52, { rhy: 118 }], [0.62, { rhy: 110 }], [0.9, { rhx: 16, rhy: 168 }]] }),
+    tap: () => ({ d: 1.4, k: [[0.1, { rfy: 10, rtoe: 12, browTilt: -1, lookX: -0.4 }], [0.2, { rfy: 0 }], [0.3, { rfy: 10 }], [0.4, { rfy: 0 }], [0.5, { rfy: 10 }], [0.6, { rfy: 0 }]] }),
+    nod: () => ({ d: 1.3, k: [[0.15, { lookY: 0.7, lid: 0.55, mouth: 'smile', mouthOpen: 0.12, browTilt: 0.2, faceY: 6 }], [0.4, { lookY: -0.1, faceY: 0 }], [0.6, { lookY: 0.6, faceY: 5 }], [0.85, { lookY: 0, faceY: 0 }]] }),
+    wince: () => ({ d: 0.9, k: [[0.06, { lid: 0.9, mouth: 'grit', mouthOpen: 0.5, browTilt: 1, shake: 1.2, lhx: 14, lhy: 140, lg: 'claw' }], [0.6, { lid: 0.4, shake: 0.3 }]] }),
+    startle: () => ({ d: 1.7, k: [[0.05, { pop: 1.3, lid: 0, pupil: 0.35, browRaise: 1.6, mouth: 'gasp', mouthOpen: 1, lhx: -60, lhy: -50, rhx: 60, rhy: -50, lg: 'palm', rg: 'palm', shake: 2.6 }], [0.4, { pop: 0.2, shake: 0.8 }], [0.8, { mouth: 'grit', mouthOpen: 0.3, browTilt: -1.2, browRaise: 0 }]] }),
+    point: s => ({ d: 1.7, k: [[0.12, { [s < 0 ? 'lhx' : 'rhx']: 96 * s, [s < 0 ? 'lhy' : 'rhy']: -26, [s < 0 ? 'lg' : 'rg']: 'point', turn: 0.35 * s, lookX: s, browTilt: -0.6, mouth: 'flat', mouthOpen: 0.35 }], [0.8, {}]] }),
+  };
+  const SPK_FIDGETS = [SPK.polish, SPK.tie, SPK.drum, SPK.tap];
+  const SPARKY_LINES = ['Hands off the merchandise.', 'Every splice in MY box gets a wire nut. No exceptions.', 'Push-in connectors. Hmph. Kids today.', 'I\'ve held more splices than you\'ve had hot dinners.'];
+  if (sparky) {
+    Object.assign(sparky.cfg.life, { breath: 4.8, beatMul: 0.29, beatOffset: 0.2 });
+    sparky.brain = (t, dt, tg, d) => {
+      /* a steel box doesn't sway or breathe much */
+      tg.hipX = 0; tg.hipY = 0; tg.lean = 0; tg.sy = 1 + (tg.sy - 1) * 0.15; tg.sx = 1 + (tg.sx - 1) * 0.15;
+      if (st.power) tg.shake = Math.max(tg.shake, 0.15);
+      /* his own steel live: it shouldn't be, he's grounded... isn't he? */
+      if (st.power && isHot('J.g')) { tg.shake += 2.4; tg.sweat = 1; tg.pupil = 0.4; tg.browRaise = 1.3; d.mouth = 'grit'; tg.mouthOpen = 0.6; }
+      else if (LAMPS.every(l => l.t.lit > 0.9)) { d.mouth = 'smile'; tg.mouthOpen = 0.1; tg.browTilt = -0.1; tg.lid = 0.42; }
+      /* pointer on him: he glares down his nose at it */
+      if (sparky.hovered && !sparky.actions.length) { tg.browTilt = -1.5; tg.browRaise = 0.15; d.mouth = 'grit'; tg.mouthOpen = 0.22; tg.lid = 0.2; }
+    };
+    sparky.root.addEventListener('click', e => { e.stopPropagation(); if (busy()) return; const m = SPK.grump(); sparky.play(m.k, m.d); A.sfx.clunk(false); say(SPARKY_LINES[(st.spN = (st.spN || 0) + 1) % SPARKY_LINES.length], 3.2, 'sparky'); });
+  }
+  /* a switch in his box just worked its own light: he notices */
+  function sparkyNod(s) {
+    if (!sparky || sparky.actions.some(a => a.slot === 'big')) return;
+    sparky.attn = s.toon.facePos(); const m = SPK.nod(); sparky.play(m.k, m.d, { slot: 'small' });
+    if (st.worked) { st.worked[s.id] = true; if (SWS.every(x => st.worked[x.id])) once('sparkyBoth', () => setTimeout(() => say('Each to his own light. As it should be.', 3.2, 'sparky'), 900)); }
+  }
+  function sparkyApprove() { if (!sparky) return; const m = SPK.nod(); sparky.play(m.k, m.d); setTimeout(() => { const m2 = SPK.polish(); sparky.play(m2.k, m2.d); }, 1400); }
+
   /* ---------- actions ---------- */
   const POWER_ON_TEXT = SWS.length > 1 ? 'Breaker ON. Hands off the wires! Try BOTH switches (click them, or press S and D).'
     : SWS.length ? 'Breaker ON. Hands off the wires! Try the switch (click it, or press S).'
@@ -1382,6 +1780,8 @@
       cancelLead(); cancelJob();
       if (!st.inspecting) {
         const m = K.brace(); bulb.play(m.k, m.d);
+        if (bulb2) setTimeout(() => { const m4 = K.brace(); bulb2.play(m4.k, m4.d); }, 230);
+        if (sparky) setTimeout(() => { const m5 = SPK.wince(); sparky.play(m5.k, m5.d); }, 140);
         /* each covers up in its own time */
         SWS.forEach((s, i) => setTimeout(() => { const m2 = K.swCover(); s.toon.play(m2.k, m2.d); }, i * 170));
         if (fuse) setTimeout(() => { const m3 = K.brace(); fuse.play(m3.k, m3.d); }, 90);
@@ -1393,7 +1793,13 @@
         if (res.short) return;
         const liveBox = SWS.find(s => isHot(s.id + '.g'));
         if (liveBox) once('tingle', () => setTimeout(() => say('Why do I feel... tingly? Is my BOX live?! Somebody check it with the tester!', 6, liveBox.id), 600));
-        if (bulb.lit > 0.9) { A.sfx.select(); const m3 = K.joy(); bulb.play(m3.k, m3.d); glance(BULB.x, BULB.y - 175 * BULB.s, 1.5); }
+        /* two lights glowing a dull orange: they're splitting the voltage */
+        const dim = LAMPS.filter(l => l.t.lit > 0.05 && l.t.lit < 0.9);
+        if (dim.length) {
+          dim.forEach((l, i) => setTimeout(() => { const m3 = K.shaky(); l.t.play(m3.k, m3.d); }, i * 260));
+          if (dim.length > 1) once('dim', () => { say('We\'re both on... sort of?', 3); setTimeout(() => { if (st.power) say('Feels like I\'m only getting HALF of something.', 3.6, 'L2'); }, 3200); });
+        }
+        if (LAMPS.some(l => l.t.lit > 0.9)) { A.sfx.select(); LAMPS.forEach((l, i) => { if (l.t.lit > 0.9) setTimeout(() => { const m3 = K.joy(); l.t.play(m3.k, m3.d); }, i * 200); }); glance(BULB.x, BULB.y - 175 * BULB.s, 1.5); }
         else if (st.wires.length === 0) { if (!LEVEL.startsLive) say('Nothing\'s even connected! Turn it off and wire me up first.'); }
         else if (bulb.lit === 0 && ((SWS[0] && swType(SWS[0].id) === 'sp' && st.sw.S1 === 1) || (CHAIN && st.sw.L1 === 1) || GUIDE)) { const m3 = K.confused(); bulb.play(m3.k, m3.d); cricket(); }
       }, 450);
@@ -1430,7 +1836,7 @@
     if (!SWS.length) { pullChain(quiet); return; }
     id = id || SWS[0].id;
     const s = SWS.find(x => x.id === id) || SWS[0], me = s.toon;
-    const litBefore = bulb.lit;
+    const litBefore = bulb.lit, before = LAMPS.map(l => l.t.lit);
     st.sw[s.id] = st.sw[s.id] ? 0 : 1;
     me.base.lever = leverOf(s.id, st.sw[s.id]);
     A.sfx.click();
@@ -1440,11 +1846,17 @@
     if (st.power) {
       const res = evaluate();
       if (res.short || quiet) return;
-      if (SWS.length > 1) { threeWayReact(s, litBefore); return; }
-      if (bulb.lit > 0.9 && litBefore < 0.9) { const m2 = K.joy(); bulb.play(m2.k, m2.d); }
-      else if (bulb.lit > 0.9 && litBefore > 0.9) {
-        once('bypass', () => { const m2 = K.swShrug(); me.play(m2.k, m2.d); say('Hey... the switch isn\'t even in my path. Flipping it does nothing!', 6); });
-      } else if (bulb.lit === 0 && st.sw[s.id] === 1 && st.wires.length) { const m2 = K.confused(); bulb.play(m2.k, m2.d); cricket(); }
+      if (LEVEL.goal === 'threeway' || LEVEL.goal === 'multiway') { threeWayReact(s, litBefore); return; }
+      /* each light answers for itself: whichever this flip lit up is glad */
+      let changed = false;
+      LAMPS.forEach((l, i) => {
+        if (l.t.lit > 0.9 && before[i] < 0.9) { changed = true; setTimeout(() => { const m2 = K.joy(); l.t.play(m2.k, m2.d); }, i * 180); }
+        else if ((l.t.lit > 0.05) !== (before[i] > 0.05)) changed = true;
+      });
+      if (changed) { if (sparky && SWS.length > 1) sparkyNod(s); return; }
+      if (LAMPS.some(l => l.t.lit > 0.9)) {
+        once('bypass' + (SWS.length > 1 ? s.id : ''), () => { const m2 = K.swShrug(); me.play(m2.k, m2.d); say(SWS.length > 1 ? 'I flip, and... nobody answers. Who do I even run?' : 'Hey... the switch isn\'t even in my path. Flipping it does nothing!', 6, SWS.length > 1 ? s.id : 'bulb'); });
+      } else if (st.sw[s.id] === 1 && st.wires.length) { const m2 = K.confused(); bulb.play(m2.k, m2.d); cricket(); }
     }
   }
   /* Level 2: what a flip did to the light decides who argues and who shrugs.
@@ -1549,6 +1961,7 @@
     if (!st.wires.length) return 'hot';
     const f = C.analyze(LEVEL, st.wires).primary;
     if (f) return HINT_TOPIC[f.code] || 'done';
+    if (LEVEL.cables && C.cableFaults(LEVEL, namedWires()).length) return 'cable';
     if (LEVEL.colorCode && C.colorFaults(LEVEL, namedWires()).length) return 'color';
     return 'done';
   }
@@ -1556,9 +1969,11 @@
   function giveHint() {
     st.hint++;
     if (!LEVEL.hintSets) { say(LEVEL.hints[(st.hint - 1) % LEVEL.hints.length], 8); return; }
-    const topic = hintTopic(), set = LEVEL.hintSets[topic];
+    const topic = hintTopic(), set = LEVEL.hintSets[topic] || GENERIC_HINTS[topic] || LEVEL.hintSets.done || GENERIC_HINTS.done;
     const n = st.hintTier[topic] = Math.min((st.hintTier[topic] || 0) + 1, set.length);
-    say(set[n - 1], 7 + n);
+    /* (on 1.6 the boss of the box does the explaining) */
+    if (LEVEL.hintVoice === 'sparky' && sparky) { const m = SPK.point(1); sparky.play(m.k, m.d); }
+    say(set[n - 1], 7 + n, LEVEL.hintVoice && (LEVEL.hintVoice !== 'sparky' || sparky) ? LEVEL.hintVoice : 'bulb');
   }
   /* straight in, no questions: used when a wire is fully landed (and by tests) */
   function addWire(a, b, rope, landed) {
@@ -1577,9 +1992,10 @@
     const tm = TERMS[id];
     if (!quiet) { tm.spin = now; tm.spinDir = 1; A.sfx.ratchet(); particles.bonk(tm.x, tm.y, 0.75); particles.spark(tm.x, tm.y, 4, 0.28); }
     glance(tm.x, tm.y, 1.1);
-    const who = ownerOf(id);
+    const who = ownerOf(id), lmp = lampOf(id);
     if (isSw(who)) { const me = swT(who), m = K.tickle(tm.x > me.cfg.x ? 1 : -1); me.play(m.k, m.d, { slot: 'small' }); }
-    else if (who === 'bulb' && !st.blown) { const m = K.tickle(tm.x > bulb.cfg.x ? 1 : -1); bulb.play(m.k, m.d, { slot: 'small' }); }
+    else if (lmp && !st.blown) { const m = K.tickle(tm.x > lmp.t.cfg.x ? 1 : -1); lmp.t.play(m.k, m.d, { slot: 'small' }); }
+    else if (sparky && who === 'J') { const m = SPK.wince(); sparky.play(m.k, m.d, { slot: 'small' }); }
     else ev.pilot = Math.max(ev.pilot, now + 0.3);
   }
   function makeLoose(rope, k, color, pins, delay) {
@@ -1719,7 +2135,9 @@
     }
     job = { from, target, rope, o, endB: 'free', pinB: [TERMS[target].x, TERMS[target].y] };
     const me = job;
-    if (countAt(target) === 0) {
+    /* (a conductor end or a splice point is never wrapped round a screw: the
+       conductors are twisted together under a wire nut, below) */
+    if (countAt(target) === 0 && !TERMS[target].nut) {
       /* 1.1: every end gets stripped by hand first */
       if (GUIDE) {
         await askStrip(target);
@@ -1737,7 +2155,7 @@
       tighten(target);
     }
     for (const id of [target, from]) {
-      if (countAt(id) === 0) continue;
+      if (countAt(id) === 0 && !TERMS[id].nut) continue;
       const pg = makePigtail(id, id === target ? from : target, false);
       if (id === target) { job.endB = 'nut'; job.pinB = pg.J; }
       else job.pinA = pg.J;
@@ -1827,7 +2245,7 @@
     const j = job;
     job = null;
     hideWrap(); hideStrip();
-    for (const [id, pg] of Object.entries(pig)) if (!pg.snug && pg.res) { pg.res = null; if (countAt(id) >= 2) pg.snug = true; else dropPigtail(id); }
+    for (const [id, pg] of Object.entries(pig)) if (!pg.snug && pg.res) { pg.res = null; if (countAt(id) >= nutAt(id)) pg.snug = true; else dropPigtail(id); }
     loose.push({ rope: j.rope, o: j.o, pin: { end: 'a', at: pinFor(j.from) }, t0: now, drop: now + 0.4 });
     A.sfx.boing();
   }
@@ -1939,9 +2357,11 @@
     A.sfx.zap(); A.sfx.boom();
     soot(p1.x, p1.y, 36);
     ev.sootOn = true; ev.soot = now;
-    if (inSocket) blowBulb();
-    else if (!st.blown) { const m = K.scream(); bulb.play(m.k, m.d); }
+    if (inSocket) blowBulb(lampOf(fault.at[0]) || LAMPS[0]);
+    if (!st.blown || inSocket) for (const l of LAMPS) if (!inSocket || lampOf(fault.at[0]) !== l) { const m = K.scream(); l.t.play(m.k, m.d); }
     SWS.forEach((s, i) => setTimeout(() => { const m2 = K.startle(1 - i * 0.2); s.toon.play(m2.k, m2.d); }, i * 140));
+    /* the bang pops Sparky's monocle clean out */
+    if (sparky) setTimeout(() => { const m4 = SPK.startle(); sparky.play(m4.k, m4.d); }, 40);
     if (fuse) {
       setTimeout(() => { const m3 = K.startle(0.8); fuse.play(m3.k, m3.d); }, 60);
       once('fuseTrip', () => setTimeout(() => say('Back in MY day I\'d have BLOWN for that, and you\'d be buying a new me! A breaker just resets.', 5, 'fuse'), 2600));
@@ -1956,28 +2376,37 @@
   /* the blow-up, in three beats: the arc in the socket lifts him off his feet,
      the glass cracks, then it goes. What's left is his scorched brass base, with
      his face peering out over the broken collar. */
-  const glassParts = bulb.parts.glass || [];
-  const cracks = el('g', { opacity: 0 }, bulb.bodyG);
-  for (const [d, w] of [['M-8,-224 L0,-206 L-12,-194 L-4,-186 M0,-206 L16,-200 L22,-212', 3.4], ['M62,-160 L48,-150 L56,-134 L42,-120 M48,-150 L34,-156', 3.4], ['M-60,-128 L-48,-120 L-54,-106', 3]]) {
-    el('path', { d, fill: 'none', stroke: INK, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, cracks);
-    el('path', { d, fill: 'none', stroke: '#ffffff', 'stroke-width': 1.3, 'stroke-linecap': 'round', opacity: 0.8, transform: 'translate(1.5,1)' }, cracks);
+  /* (every light on the board carries its own cracks and scorched base) */
+  for (const l of LAMPS) {
+    const t = l.t;
+    l.glass = t.parts.glass || [];
+    l.cracks = el('g', { opacity: 0 }, t.bodyG);
+    for (const [d, w] of [['M-8,-224 L0,-206 L-12,-194 L-4,-186 M0,-206 L16,-200 L22,-212', 3.4], ['M62,-160 L48,-150 L56,-134 L42,-120 M48,-150 L34,-156', 3.4], ['M-60,-128 L-48,-120 L-54,-106', 3]]) {
+      el('path', { d, fill: 'none', stroke: INK, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, l.cracks);
+      el('path', { d, fill: 'none', stroke: '#ffffff', 'stroke-width': 1.3, 'stroke-linecap': 'round', opacity: 0.8, transform: 'translate(1.5,1)' }, l.cracks);
+    }
+    const burnt = l.burnt = el('g', { style: 'display:none' }, t.bodyG);
+    t.bodyG.insertBefore(burnt, t.faceG);
+    /* the broken glass collar, the soot on the brass, the filament frizzled */
+    el('path', { d: 'M-25,-57 L-30,-76 L-20,-68 L-15,-88 L-6,-70 L2,-84 L9,-68 L19,-80 L27,-57 Q0,-63 -25,-57 Z', fill: '#ede6d2', stroke: INK, 'stroke-width': 4.5, 'stroke-linejoin': 'round' }, burnt);
+    el('path', { d: 'M-24,-60 Q0,-66 26,-60', fill: 'none', stroke: '#5a4a38', 'stroke-width': 5, opacity: 0.55 }, burnt);
+    el('path', { d: 'M-8,-58 L-12,-80 L-4,-86 M8,-58 L13,-78 L6,-84', fill: 'none', stroke: '#4a3a2c', 'stroke-width': 2.8, 'stroke-linejoin': 'round' }, burnt);
+    l.ember = el('path', { d: 'M-4,-86 q3,-6 5,0 t5,0', fill: 'none', stroke: '#ff9a3a', 'stroke-width': 3, 'stroke-linecap': 'round' }, burnt);
+    el('ellipse', { cx: -8, cy: -30, rx: 16, ry: 10, fill: '#1a0f0a', opacity: 0.55 }, burnt);
+    el('ellipse', { cx: 12, cy: -44, rx: 10, ry: 7, fill: '#1a0f0a', opacity: 0.45 }, burnt);
   }
-  const burnt = el('g', { style: 'display:none' }, bulb.bodyG);
-  bulb.bodyG.insertBefore(burnt, bulb.faceG);
-  /* the broken glass collar, the soot on the brass, the filament frizzled */
-  el('path', { d: 'M-25,-57 L-30,-76 L-20,-68 L-15,-88 L-6,-70 L2,-84 L9,-68 L19,-80 L27,-57 Q0,-63 -25,-57 Z', fill: '#ede6d2', stroke: INK, 'stroke-width': 4.5, 'stroke-linejoin': 'round' }, burnt);
-  el('path', { d: 'M-24,-60 Q0,-66 26,-60', fill: 'none', stroke: '#5a4a38', 'stroke-width': 5, opacity: 0.55 }, burnt);
-  el('path', { d: 'M-8,-58 L-12,-80 L-4,-86 M8,-58 L13,-78 L6,-84', fill: 'none', stroke: '#4a3a2c', 'stroke-width': 2.8, 'stroke-linejoin': 'round' }, burnt);
-  const ember = el('path', { d: 'M-4,-86 q3,-6 5,0 t5,0', fill: 'none', stroke: '#ff9a3a', 'stroke-width': 3, 'stroke-linecap': 'round' }, burnt);
-  el('ellipse', { cx: -8, cy: -30, rx: 16, ry: 10, fill: '#1a0f0a', opacity: 0.55 }, burnt);
-  el('ellipse', { cx: 12, cy: -44, rx: 10, ry: 7, fill: '#1a0f0a', opacity: 0.45 }, burnt);
-  function setBurnt(on) {
-    st.burnt = on;
-    for (const g of glassParts) g.style.display = on ? 'none' : '';
-    burnt.style.display = on ? '' : 'none';
-    cracks.setAttribute('opacity', 0);
+  /* the light that blew (or is being replaced) */
+  let BL = LAMPS[0];
+  function setBurnt(on, l = BL) {
+    l.t.burnt = on;
+    st.burnt = LAMPS.some(x => x.t.burnt);
+    for (const g of l.glass) g.style.display = on ? 'none' : '';
+    l.burnt.style.display = on ? '' : 'none';
+    l.cracks.setAttribute('opacity', 0);
   }
-  function blowBulb() {
+  function blowBulb(l = LAMPS[0]) {
+    BL = l;
+    const bulb = l.t, cracks = l.cracks;
     st.blown = true;
     const m = K.blowUp(); bulb.play(m.k, m.d);
     const [gx, gy] = bulb.world(0, -150);
@@ -1993,7 +2422,7 @@
     setTimeout(() => {
       if (!st.blown) return;
       const [cx, cy] = bulb.world(0, -150);
-      setBurnt(true);
+      setBurnt(true, l);
       A.sfx.shatter(); A.sfx.pop();
       particles.shards(cx, cy, 26, 590); particles.bonk(cx, cy, 2.2); particles.smoke(cx, cy, 7, 1.3);
       soot(cx, cy + 40, 60);
@@ -2005,7 +2434,7 @@
       for (let i = 1; i <= 5; i++) setTimeout(() => { if (st.burnt) { const [ex, ey] = bulb.world(0, -90); particles.smoke(ex, ey, 1, 0.5, 8); } }, 400 + i * 450);
       const m4 = { d: 3, k: [[0.05, { sy: 0.86, sx: 1.08, hipY: 6, lid: 0.55, pupil: 0.4, browTilt: 1.3, mouth: 'worry', mouthOpen: 0.5, lhx: -40, lhy: 40, rhx: 40, rhy: 40, lg: 'back', rg: 'back', knee: 0.6, shake: 1.2 }], [0.5, { lean: -6 }], [0.9, { lean: 4 }]] };
       bulb.play(m4.k, m4.d);
-      setTimeout(() => { if (st.burnt) say('...ow.', 2.2, 'husk'); }, 1500);
+      setTimeout(() => { if (st.burnt) say('...ow.', 2.2, l === LAMPS[0] ? 'husk' : l.id); }, 1500);
       setTimeout(() => { if (st.burnt && (SWS.length || outlet)) say(SWS.length > 1 ? 'He POPPED! Right in his own socket!' : 'He... he POPPED! Right in his own socket!', 3, SWS.length ? SWS[SWS.length - 1].id : 'sw'); }, 3000);
     }, 1000);
     glance(gx, gy, 2);
@@ -2027,6 +2456,7 @@
   /* "New bulb, please": a cord comes down, hooks the scorched one by the collar
      and hauls him up and out, then the fresh one is lowered in on it */
   function newBulb() {
+    const bulb = BL.t;
     if (st.burnt) {
       st.faultLock = true;
       bulb.actions = [];
@@ -2044,6 +2474,7 @@
     lowerBulb();
   }
   function lowerBulb() {
+    const bulb = BL.t, BULB = BL.def;
     st.blown = false; st.faultLock = false;
     ev.sootOn = false; ev.soot = now;
     status('Breaker OFF. Safe to wire. Drag from one screw to another.');
@@ -2060,7 +2491,7 @@
       [0.56, { hipY: 0, sy: 0.8, sx: 1.14, lfy: 0, rfy: 0, lookY: 0.5 }],
       [0.64, { sy: 1.06, sx: 0.96, lhx: -22, lhy: 50, rhx: 22, rhy: 50, lg: 'fist', rg: 'fist', lookY: 0 }],
       [0.72, { turn: 0.55, sy: 1 }], [0.78, { turn: -0.55 }], [0.84, { turn: 0.5 }], [0.9, { turn: 0 }],
-    ], 2.8, { cues: [[0.01, () => A.sfx.slide(false)], [0.56, land], [0.72, () => A.sfx.ratchet()], [0.78, () => A.sfx.ratchet()], [0.84, () => A.sfx.ratchet()], [0.95, () => { say('P-please get it right this time...', 5); const m = K.shaky(); bulb.play(m.k, m.d); }]] });
+    ], 2.8, { cues: [[0.01, () => A.sfx.slide(false)], [0.56, land], [0.72, () => A.sfx.ratchet()], [0.78, () => A.sfx.ratchet()], [0.84, () => A.sfx.ratchet()], [0.95, () => { say('P-please get it right this time...', 5, BL.id === 'L1' ? 'bulb' : BL.id); const m = K.shaky(); bulb.play(m.k, m.d); }]] });
     evaluate();
   }
 
@@ -2199,7 +2630,7 @@
     const todo = SWS.filter(s => state[s.id] != null && st.sw[s.id] !== state[s.id]);
     if (!todo.length) return;
     const word = s => (swType(s.id) === 'sp' ? (state[s.id] ? 'ON' : 'OFF') : C.posName(LEVEL.components, s.id, state[s.id]));
-    const who = s => (SWS.length > 1 ? (s.id === 'S1' ? 'Bottom switch' : 'Top switch') : 'Switch');
+    const who = s => (LEVEL.swHeads ? LEVEL.swHeads[SWS.indexOf(s)] + ' switch' : SWS.length > 1 ? (s.id === 'S1' ? 'Bottom switch' : 'Top switch') : 'Switch');
     say(todo.map(s => `${who(s)}, ${word(s)}`).join('. ') + (why ? ': ' + why : '!'), 2.2, 'insp');
     await iwait(0.6);
     for (const s of todo) {
@@ -2217,14 +2648,18 @@
   async function inspectorRun() {
     if (st.inspecting || st.blown || App.cardOpen || App.busy || st.faultLock || st.phBusy) return;
     const an = C.analyze(LEVEL, st.wires);
-    const route = C.route(LEVEL, st.wires);
+    /* (he only walks to what's on the board: a switch grounded through its
+       box's mounting screws has no screw of its own to visit) */
+    const route = C.route(LEVEL, st.wires).filter(id => TERMS[id]);
     /* the fault he walks into first, following the job out from the HOT; a
        dangerous one always outranks a merely wrong one */
     let fault = null;
     const pool = an.faults.some(f => f.danger) ? an.faults.filter(f => f.danger) : an.faults;
     for (const id of route) { fault = pool.find(f => f.at[0] === id); if (fault) break; }
     fault = fault || an.primary;
-    /* 1.1 and 1.2: a colour that lies is written up like any other fault */
+    /* what's in the wall: a conductor with no cable to run in, or one too many */
+    if (!fault && LEVEL.cables) fault = C.cableFaults(LEVEL, namedWires())[0] || null;
+    /* a colour that lies is written up like any other fault */
     if (!fault && LEVEL.colorCode) fault = C.colorFaults(LEVEL, namedWires())[0] || null;
     const report = fault ? Object.assign({ pass: false, rows: an.rows, fault }, C.describe(LEVEL, fault))
       : { pass: true, title: 'Wired right!', msg: LEVEL.winText, rows: an.rows };
@@ -2312,7 +2747,7 @@
         await iwait(0.4);
         await setSwitchFor(row.state);
         evaluate();
-        inspScreen(row.lit.L1 > 0.9 ? 'LIT' : 'DARK');
+        inspScreen(LAMPS.length > 1 ? LAMPS.map(l => (row.lit[l.id] > 0.9 ? 'ON' : row.lit[l.id] > 0.05 ? 'DIM' : 'OFF')).join(' ') : row.lit.L1 > 0.9 ? 'LIT' : row.lit.L1 > 0.05 ? 'DIM' : 'DARK');
         insp.play(K.tick().k, K.tick().d, { slot: 'small' });
         A.sfx.typeKey();
         await iwait(0.7);
@@ -2329,11 +2764,13 @@
     if (App.current !== SCREEN || !st.inspecting) return;
     showResult(report);
     if (report.pass) {
-      st.won = true; save();
+      st.won = true; st.passT = now; save();
       setTimeout(() => { particles.confetti(W / 2, 300, 60); A.sfx.fanfare(); }, (0.3 + an.rows.length * 0.28 + 0.35) * 1000);
       const m = K.joy(); bulb.play(m.k, m.d);
+      if (bulb2) setTimeout(() => { const m4 = K.joy(); bulb2.play(m4.k, m4.d); }, 410);
       SWS.forEach((s, i) => setTimeout(() => { const m2 = K.swCheer(); s.toon.play(m2.k, m2.d); }, i * 220));
       if (fuse) setTimeout(() => { const m3 = K.joy(); fuse.play(m3.k, m3.d); }, 330);
+      if (sparky) setTimeout(() => sparkyApprove(), 520);
     } else {
       const m = K.confused(); if (!st.blown) bulb.play(m.k, m.d);
       SWS.forEach((s, i) => setTimeout(() => { const m2 = K.swShrug(); s.toon.play(m2.k, m2.d); }, i * 260));
@@ -2631,7 +3068,7 @@
   const qMark = el('text', { 'text-anchor': 'middle', 'font-family': 'Rye, Georgia, serif', 'font-size': 46, fill: '#ffe45a', stroke: INK, 'stroke-width': 3, 'paint-order': 'stroke', opacity: 0 }, L.fx);
   qMark.textContent = '?';
   function swapPlan() {
-    if (ID !== 2) return null;
+    if (!LEVEL.swap) return null;
     const bare = st.wires.map(w => ({ a: w.a, b: w.b }));
     const r = C.swapTravelers(LEVEL, bare, 'S2');
     if (!r || r.from.some(t => countAt(t) !== 1) || !C.swapHarmless(LEVEL, bare, r.wires)) return null;
@@ -2730,14 +3167,19 @@
     if (r.rows) {
       table.hidden = false;
       const head = table.createTHead().insertRow();
-      (SWS.length > 1 ? ['Bottom', 'Top', 'Light'] : SWS.length ? ['Switch', 'Bulb'] : CHAIN ? ['Chain', 'Bulb'] : ['Bulb']).forEach(h => { const th = document.createElement('th'); th.textContent = h; head.appendChild(th); });
+      /* one column per switch, one per light */
+      const swHeads = LEVEL.swHeads || (SWS.length > 1 ? ['Bottom', 'Top'] : SWS.length ? ['Switch'] : CHAIN ? ['Chain'] : []);
+      const lampHeads = LAMPS.length > 1 ? LAMPS.map((l, i) => `Light ${i + 1}`) : [SWS.length > 1 ? 'Light' : 'Bulb'];
+      swHeads.concat(lampHeads).forEach(h => { const th = document.createElement('th'); th.textContent = h; head.appendChild(th); });
       const body = table.createTBody();
       r.rows.forEach((row, i) => {
         const tr = body.insertRow();
         tr.style.setProperty('--i', i);
         for (const id of Object.keys(st.sw)) tr.insertCell().textContent = C.posName(LEVEL.components, id, row.state[id]);
-        const b = row.res.short ? 'SHORT!' : row.lit.L1 > 0.9 ? 'LIT' : row.lit.L1 > 0.05 ? 'dim' : 'dark';
-        const c = tr.insertCell(); c.textContent = b; c.className = b === 'LIT' ? 'lit' : b === 'SHORT!' ? 'bad' : '';
+        for (const l of LAMPS) {
+          const b = row.res.short ? 'SHORT!' : row.lit[l.id] > 0.9 ? 'LIT' : row.lit[l.id] > 0.05 ? 'dim' : 'dark';
+          const c = tr.insertCell(); c.textContent = b; c.className = b === 'LIT' ? 'lit' : b === 'SHORT!' ? 'bad' : '';
+        }
         setTimeout(() => A.sfx.typeKey(), (0.25 + i * 0.28) * 1000);
       });
     } else table.hidden = true;
@@ -2755,8 +3197,8 @@
     }, (sd + 0.12) * 1000);
     /* E. the Journeyman's card, punched for every bit of craft */
     punch.hidden = !r.pass;
-    const total = ID === 2 ? 5 : 4;
-    punch.querySelectorAll('li').forEach(li => { li.hidden = li.dataset.k === 'bonus' ? ID !== 2 : false; });
+    const total = LEVEL.bonus ? 5 : 4;
+    punch.querySelectorAll('li').forEach(li => { li.hidden = li.dataset.k === 'bonus' ? !LEVEL.bonus : false; });
     st.bonusGot = false;
     if (r.pass) {
       const g = grade();
@@ -2774,7 +3216,7 @@
     }
     /* Level 2: the Inspector's one quick bonus question (answers shuffled) */
     const bq = document.getElementById('bonusQ');
-    bq.hidden = !(r.pass && ID === 2);
+    bq.hidden = !(r.pass && LEVEL.bonus);
     if (!bq.hidden) {
       document.getElementById('bonusWhy').textContent = '';
       const btns = [...bq.querySelectorAll('.bonus-btn')];
@@ -2792,7 +3234,7 @@
     /* keyboard focus starts on the way out, never on an answer */
     try { document.getElementById('resultRetry').focus({ preventScroll: true }); } catch (e) { /* no focus */ }
   }
-  if (ID === 2) {
+  if (LEVEL.bonus) {
     document.querySelectorAll('#bonusQ .bonus-btn').forEach(b => b.addEventListener('click', () => {
       if (App.current !== SCREEN || b.disabled) return;
       const right = b.dataset.ok === '1';
@@ -2915,6 +3357,8 @@
   breaker.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleBreaker(); } });
   for (const s of SWS) s.toon.root.addEventListener('click', e => { e.stopPropagation(); if (!busy()) flipSwitch(s.id); });
   bulb.root.addEventListener('click', e => { e.stopPropagation(); if (!busy() && !st.blown) { const m = K.startle(0.5); bulb.play(m.k, m.d); A.sfx.squeak(); } });
+  const BULB2_LINES = ['Mmf. Five more minutes.', 'Easy. I\'m a hundred watts of patience.', 'Poke the OTHER one. He likes it.'];
+  if (bulb2) bulb2.root.addEventListener('click', e => { e.stopPropagation(); if (busy() || st.blown) return; const m = K.startle(0.4); bulb2.play(m.k, m.d); A.sfx.squeak(); say(BULB2_LINES[(st.b2N = (st.b2N || 0) + 1) % BULB2_LINES.length], 2.8, 'L2'); });
   insp.root.addEventListener('click', e => { e.stopPropagation(); if (IN.st !== 'off') IN.skip = true; });
   const FUSE_LINES = ['Hey! Glass here! Careful!', 'Twenty years in a fuse box, kid. I\'ve seen things.', 'A breaker trips and resets. Me? I blow ONCE. Respect the classics.', 'Don\'t mind me. Just a spare.'];
   const OUTLET_LINES = ['Circuit 2! Never off. Somebody\'s gotta be.', 'Hey! Watch where you poke, pal.', 'Me? I\'m on another breaker entirely. Sleep well.'];
@@ -2931,7 +3375,7 @@
     chainG.addEventListener('click', e => { e.stopPropagation(); if (!busy()) pullChain(); });
     chainG.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !busy()) { e.preventDefault(); pullChain(); } });
   }
-  for (const toon of [...SWS.map(s => s.toon), bulb].concat(fuse ? [fuse] : [], outlet ? [outlet] : [])) {
+  for (const toon of [...SWS.map(s => s.toon), bulb].concat(bulb2 ? [bulb2] : [], sparky ? [sparky] : [], fuse ? [fuse] : [], outlet ? [outlet] : [])) {
     toon.root.addEventListener('pointerenter', () => { toon.hovered = true; });
     toon.root.addEventListener('pointerleave', () => { toon.hovered = false; });
   }
@@ -2999,7 +3443,7 @@
           stepRope(v.rope, h, pa, pb);
         } else if (!v.rope.sleep) stepRope(v.rope, h, pinOf(w.a), pinOf(w.b));
       }
-      for (const [id, pg] of Object.entries(pig)) if (!pg.rope.sleep) stepRope(pg.rope, h, [TERMS[id].x, TERMS[id].y], pg.J);
+      for (const [id, pg] of Object.entries(pig)) if (pg.rope && !pg.rope.sleep) stepRope(pg.rope, h, [TERMS[id].x, TERMS[id].y], pg.J);
       for (const l of loose) {
         const pinned = l.pin && now < l.drop;
         if (l.pin && l.pin.end === 'mid') {
@@ -3046,18 +3490,15 @@
     if (Math.abs(cam.z - 1) < 0.01) { cam.cx = x; cam.cy = y; }
     cam.pz = z; cam.until = now + hold; cam.rate = rate;
   }
-  function applyCam() {
-    const s = cam.z === 1 ? '' : `translate(${R(cam.cx)},${R(cam.cy)}) scale(${Math.round(cam.z * 10000) / 10000}) translate(${R(-cam.cx)},${R(-cam.cy)})`;
-    const tr = (s + (KZ !== 1 ? ` scale(${KZ})` : '')).trim();
-    if (tr === cam.tr) return;
-    cam.tr = tr;
-    if (tr) root.setAttribute('transform', tr); else root.removeAttribute('transform');
-  }
+  /* the camera is one compositor transform on the stage, the light pass and all
+     (App.camera): nothing is re-rasterized and the light can't lag the picture */
+  function applyCam() { App.camera(cam.z, cam.x, cam.y, cam.cx, cam.cy); }
   function camTick(dt) {
     /* the light comes on: a slow push in on it (not every time) */
-    const lit = !st.blown && bulb.p.glow > 0.7;
-    if (lit && !cam.lit && now > cam.nextPush) { const [bx, by] = bulb.world(0, -110); camPush(bx * KZ, by * KZ, 1.045, 2.4, 1.4); cam.nextPush = now + 8; }
-    cam.lit = bulb.p.glow > 0.4 && (cam.lit || lit);
+    const top = LAMPS.reduce((m, l) => (l.t.p.glow > m.t.p.glow ? l : m)).t;
+    const lit = !st.blown && top.p.glow > 0.7;
+    if (lit && !cam.lit && now > cam.nextPush) { const [bx, by] = LAMPS.length > 1 ? [(LAMPS[0].def.x + LAMPS[1].def.x) / 2, top.world(0, -110)[1]] : top.world(0, -110); camPush(bx * KZ, by * KZ, 1.045, 2.4, 1.4); cam.nextPush = now + 8; }
+    cam.lit = top.p.glow > 0.4 && (cam.lit || lit);
     /* a short or a bang: a quick punch in on it */
     if (ev.shake !== cam.lastShake) {
       cam.lastShake = ev.shake;
@@ -3086,8 +3527,10 @@
       if (v.current) v.o.flow.setAttribute('stroke-dashoffset', R(((-t * 90 * v.dir) % 30 + 30) % 30));
     }
     for (const [id, pg] of Object.entries(pig)) {
-      drawRope(pg.o, pg.rope, TERMS[id], 'nut');
-      pg.o.glow.setAttribute('opacity', pg.hot ? 0.16 : 0);
+      if (pg.o) {
+        drawRope(pg.o, pg.rope, TERMS[id], 'nut');
+        pg.o.glow.setAttribute('opacity', pg.hot ? 0.16 : 0);
+      }
       const tu = clamp((now - pg.turn) / 0.25);
       const rot = (pg.twists + (tu < 1 ? tu - 1 : 0)) * 120;
       const wob = pg.snug ? 0 : 8 * Math.sin(t * 6);
@@ -3099,7 +3542,7 @@
     }
     for (const l of loose) {
       const pinned = l.pin && now < l.drop && l.pin.end !== 'mid';
-      const at = pinned ? (l.pin.at.id && pig[l.pin.at.id] ? 'nut' : l.pin.at.id ? TERMS[l.pin.at.id] : null) : null;
+      const at = pinned ? (l.pin.at.id ? endOf(l.pin.at.id) : null) : null;
       drawRope(l.o, l.rope, pinned && l.pin.end === 'a' ? at : null, pinned && l.pin.end === 'b' ? at : null);
       const u = (now - l.drop) / 0.5;
       l.o.g.setAttribute('opacity', u > 0 ? R((1 - u) * 100) / 100 : 1);
@@ -3112,7 +3555,8 @@
       const su = (now - tm.spin) / 0.42;
       const rot = tm.rot + (su >= 0 && su < 1 ? (1 - Math.pow(1 - su, 3)) * 540 * tm.spinDir : 0);
       if (su >= 1) { tm.rot = (tm.rot + 540 * tm.spinDir) % 360; tm.spin = -9; }
-      tm.slot.setAttribute('transform', `translate(${tm.x},${tm.y}) rotate(${R(rot)})`);
+      /* (only screws turn: written when it changes) */
+      if (tm.slot) { const tr = `translate(${tm.x},${tm.y}) rotate(${R(rot)})`; if (tr !== tm.slotT) { tm.slotT = tr; tm.slot.setAttribute('transform', tr); } }
       let op = 0, r = 23, sw2 = 4;
       if (lead && lead.retract < 0) {
         if (id === lead.from) { op = 0.95; r = 21; }
@@ -3245,13 +3689,27 @@
     /* with the GPU pass on (js/gfx.js) the room's light is real light, in world
        units scaled by this level's camera; the painted pools and glows step aside */
     const gl = !!(G && G.on);
+    /* on a phone the GPU spot draws the beam (the SVG one is a big blended shape
+       re-rasterized every frame as the lamp swings) */
+    lamp.coneG.style.display = gl && G.touch ? 'none' : '';
+    /* depth of field (High, phones too): the bare wall behind the board a touch
+       soft. It's a once-baked blurred bitmap (GFX.dof), never a live filter */
+    const dof = gl && G.q === 'high';
+    if (dof !== cam.dof) { cam.dof = dof; if (!dofW && dof && G.dof) dofW = G.dof([L.wall], { x: -20, y: -20, w: W + 40, h: 620 }, { k: KZ }); if (dofW) dofW.set(dof); }
     lampPool.setAttribute('opacity', gl ? 0 : lampOn);
     benchPool.setAttribute('opacity', gl ? 0 : lampOn);
     benchPool.setAttribute('cx', R(LX + Math.sin(lamp.th) * 520));
     darkRect.setAttribute('opacity', black ? (stutter ? 0.5 : gl ? 0.9 : 0.96) : 0);
+    /* the music follows the job: tense strings while it's live and dangerous or
+       blacked out, the Phantom's theremin while he's out, brass when it's been
+       approved, a sleepy pad when you've wandered off */
+    if (A.mood) {
+      const danger = black || now - ev.tripT < 3 || now - HS.t0 < 2.5 ? 1 : LEVEL.safety && st.power && st.wires.length && !st.inspecting ? 0.35 : 0;
+      A.mood({ danger, phantom: ph.root.style.display !== 'none' ? 1 : 0, success: now - (st.passT || -99) < 24 ? 1 : 0, idle: !danger && now - lastInput > 15 ? 0.8 : 0 });
+    }
     if (gl) {
-      G.clear(); G.view(KZ * cam.z, cam.cx * (1 - cam.z) + cam.x, cam.cy * (1 - cam.z) + cam.y);
-      const bl = st.blown ? 0 : clamp(bulb.p.glow);
+      G.clear(); G.view(KZ);
+      const bl = st.blown ? 0 : clamp(Math.max(...LAMPS.map(l => l.t.p.glow)));
       G.ambient(black ? [0.15, 0.15, 0.2] : [0.7 + bl * 0.06, 0.66 + bl * 0.05, 0.62 + bl * 0.03]);
       if (lampOn > 0) {
         /* the shop lamp: a wide spot down the shade's axis (it swings with the
@@ -3261,17 +3719,20 @@
         G.light(LX - sn * (540 / cs), 578, 430 / KZ, 58, [0.26 * lampOn, 0.21 * lampOn, 0.14 * lampOn]);
         G.glow(LX - sn * 76, 22 + cs * 76, 70, [1, 0.93, 0.75], 1.5 * lampOn);
       }
-      /* the light we're wiring: when it works, it lights up the whole corner */
-      if (bl > 0.02) {
-        const [gx, gy] = bulb.world(0, -150);
-        G.light(gx, gy + 30, 520, 440, [0.66 * bl, 0.52 * bl, 0.3 * bl]);
-        G.glow(gx, gy, 140, [1, 0.9, 0.62], 1.8 * bl);
+      /* the light we're wiring: when it works, it lights up the whole corner (a
+         filament starved of voltage only glows a dull orange) */
+      for (const l of LAMPS) {
+        const b = st.blown ? 0 : clamp(l.t.p.glow);
+        if (b <= 0.02) continue;
+        const [gx, gy] = l.t.world(0, -150), warm = clamp((b - 0.15) / 0.6), k = LAMPS.length > 1 ? 0.8 : 1;
+        G.light(gx, gy + 30, 520 * k, 440 * k, [0.66 * b, 0.52 * b * (0.55 + 0.45 * warm), 0.3 * b * (0.3 + 0.7 * warm)]);
+        G.glow(gx, gy, 140, [1, 0.62 + 0.28 * warm, 0.3 + 0.32 * warm], 1.8 * b);
       }
       const pilot = (st.power && !(now < ev.pilot && f % 4 < 2)) || (!st.power && now < ev.pilot && f % 4 < 2);
       if (pilot && !black) G.glow(276 + PX, 240 + PY, 46, [1, 0.28, 0.16], 0.9);
       if (neonAt) G.glow(neonAt[0], neonAt[1], 90, [1, 0.5, 0.2], 1.3 * (0.75 + 0.25 * Math.sin(t * 40)));
       /* soft contact shadows for whoever stands on the bench */
-      if (!black) for (const c of [insp, fuse]) if (c && c.root.style.display !== 'none' && c.cur) G.shadowOf(c, 0.4, LX);
+      if (!black) for (const c of [insp, fuse, sparky]) if (c && c.root.style.display !== 'none' && c.cur) G.shadowOf(c, 0.4, LX);
     }
     for (const de of darkEyes) {
       const c = de.c, F = c.cfg.face, evil = c === ph;
@@ -3304,24 +3765,28 @@
     for (const s of soots) s.setAttribute('opacity', R(sop * 100) / 100);
     if (!ev.sootOn && su2 >= 1 && soots.length) { soots.forEach(s => s.remove()); soots.length = 0; }
     /* the lit bulb warms the whole corner of the room */
-    const lit = st.blown ? 0 : clamp(bulb.p.glow);
-    const [blx, bly] = bulb.world(0, -150);
-    sa(bulbGlow, { cx: R(blx), cy: R(bly + 30), opacity: gl ? 0 : R(clamp(lit - 0.12) * 80) / 100 });
+    let lit = 0;
+    for (const l of LAMPS) {
+      const b = st.blown ? 0 : clamp(l.t.p.glow), [blx, bly] = l.t.world(0, -150);
+      lit = Math.max(lit, b);
+      sa(l.glowEl, { cx: R(blx), cy: R(bly + 30), opacity: gl ? 0 : R(clamp(b - 0.12) * 80) / 100 });
+    }
     vign.setAttribute('opacity', gl ? 0 : R((1 - lit * 0.35) * 100) / 100);
     /* the replacement bulb comes down on a cord */
+    const cb = BL.t;
     if (now > ev.cord0 && now < ev.cord1 + 0.6) {
-      const [hx, hy] = bulb.world(0, -236);
+      const [hx, hy] = cb.world(0, -236);
       const up = clamp((now - ev.cord1) / 0.6);
       cord.setAttribute('d', `M${R(hx)},-20 L${R(hx)},${R(hy + (-20 - hy) * up)}`);
       cord.setAttribute('opacity', up < 1 ? 1 : 0);
     } else if (now > ev.haul0 && now < ev.haul0 + 1.5) {
       /* ...and before that, down it comes for the scorched one */
-      const [hx, hy] = bulb.world(0, -96);
+      const [hx, hy] = cb.world(0, -96);
       const u = clamp((now - ev.haul0) / 0.55);
       cord.setAttribute('d', `M${R(hx)},-20 L${R(hx)},${R(-20 + (hy + 20) * u)}`);
       cord.setAttribute('opacity', 1);
     } else cord.setAttribute('opacity', 0);
-    if (st.burnt) ember.setAttribute('opacity', R(clamp(0.35 + 0.5 * Math.sin(t * 11) + 0.3 * Math.random()) * 100) / 100);
+    for (const l of LAMPS) if (l.t.burnt) l.ember.setAttribute('opacity', R(clamp(0.35 + 0.5 * Math.sin(t * 11) + 0.3 * Math.random()) * 100) / 100);
     /* speech bubble pops in and fades out */
     const bu = (now - bubS.t0) / 0.22;
     const bs = bu < 1 ? 0.5 + 0.5 * easeOutBack(clamp(bu)) : 1;
@@ -3375,16 +3840,17 @@
     document.getElementById('levelName').textContent = `Level ${LEVEL.num}: ${LEVEL.name}`;
     const form = document.querySelector('#resultCard .report-head span:last-child');
     if (form) form.textContent = LEVEL.form;
-    /* the first two jobs keep it to black, white and green */
+    /* the first jobs keep it to black, white and green (a 2-wire cable has no red) */
     const red = document.querySelector('.swatch[data-color="#c7322b"]');
-    if (red) red.hidden = ID >= 11;
-    if (ID >= 11 && st.color === '#c7322b') st.color = '#1c1c1e';
-    punch.querySelectorAll('li').forEach(li => { const t = PUNCH_TEXT[ID][li.dataset.k]; if (t) li.lastChild.textContent = t; });
-    punch.querySelector('li[data-k="bonus"]').hidden = ID !== 2;
-    /* the re-taped white only comes out for the stairway job */
+    if (red) red.hidden = !!LEVEL.noRed;
+    if (LEVEL.noRed && st.color === '#c7322b') st.color = '#1c1c1e';
+    const pt = LEVEL.punch || PUNCH_TEXT[ID];
+    punch.querySelectorAll('li').forEach(li => { const t = pt[li.dataset.k]; if (t) li.lastChild.textContent = t; });
+    punch.querySelector('li[data-k="bonus"]').hidden = !LEVEL.bonus;
+    /* the re-taped white only comes out for the jobs that need one */
     const taped = document.querySelector(`.swatch[data-color="${TAPED}"]`);
-    if (taped) taped.hidden = ID !== 2;
-    if (ID !== 2 && st.color === TAPED) st.color = '#1c1c1e';
+    if (taped) taped.hidden = !LEVEL.taped;
+    if (!LEVEL.taped && st.color === TAPED) st.color = '#1c1c1e';
     document.querySelectorAll('.swatch').forEach(s => s.setAttribute('aria-pressed', String(s.dataset.color === st.color)));
   }
   App.register(SCREEN, {
@@ -3396,10 +3862,11 @@
       cam.z = 1; cam.until = -9; cam.lit = false; cam.lastShake = ev.shake; applyCam();
       st.blown = false; st.faultLock = false; st.trip = false; st.inspecting = false; st.worked = {};
       st.swapDone = false; st.phBusy = false; st.swapCheck = 0; PH.waitSwap = null; PH.run = (PH.run || 0) + 1; PH.q = -9; PH.lt = PH.rt = null; ph.actions = [];
-      setBurnt(false); ev.haul0 = -9;
+      for (const l of LAMPS) { setBurnt(false, l); l.t.root.style.display = ''; l.t.actions = []; }
+      BL = LAMPS[0]; ev.haul0 = -9;
       for (const s of SWS) { st.sw[s.id] = 0; s.toon.base.lever = leverOf(s.id, 0); s.toon.actions = []; s.glare = -9; }
-      bulb.root.style.display = ''; bulb.actions = [];
       if (fuse) fuse.actions = [];
+      if (sparky) sparky.actions = [];
       IN.run = (IN.run || 0) + 1;
       insp.root.style.display = 'none'; IN.st = 'off'; IN.aim = null; IN.capFly = null; IN.dazed = -9; IN.xray = -9;
       insp.cfg.y = 594; inspWrap.removeAttribute('transform'); inspWrap.removeAttribute('filter');
@@ -3432,6 +3899,7 @@
       st.visits = (st.visits || 0) + 1;
     },
     shown() {
+      if (LEVEL.intro) { say(LEVEL.intro[st.visits > 1 ? 1 : 0], 5, LEVEL.introVoice && (LEVEL.introVoice !== 'sparky' || sparky) ? LEVEL.introVoice : 'bulb'); return; }
       if (ID === 11) { say(st.visits > 1 ? 'Clean board. And that breaker\'s ON again...' : 'A brand-new lampholder! Uh... that breaker\'s still ON, y\'know.', 5); return; }
       if (ID === 12) { say(st.visits > 1 ? 'Clean board. Breaker\'s ON again...' : 'See my chain? No wall switch this time. Oh, and the breaker\'s ON.', 5); return; }
       if (ID === 1) say(st.visits > 1 ? 'Clean board! Fresh start. The breaker\'s off, I checked. Twice.' : 'Oh! You\'re wiring ME? Okay. Okay. Hint button\'s down on the bench if you need it.', 6);
@@ -3451,7 +3919,7 @@
       /* the breaker handle springs toward where it's been thrown */
       const bt = st.power ? 1 : st.trip ? 0 : -1;
       brk.v += (bt - brk.p) * 520 * dt; brk.v *= Math.exp(-18 * dt); brk.p += brk.v * dt;
-      const cast = [...SWS.map(s => s.toon), bulb].concat(fuse ? [fuse] : [], outlet ? [outlet] : []);
+      const cast = [...SWS.map(s => s.toon), bulb].concat(bulb2 ? [bulb2] : [], sparky ? [sparky] : [], fuse ? [fuse] : [], outlet ? [outlet] : []);
       const fresh = cursor && (lead || cast.some(c => c.hovered) || st.tester);
       const goal = fresh ? cursor : st.inspecting && IN.st !== 'off' ? insp.facePos() : now < look.until ? [look.x, look.y] : null;
       cast.forEach((toon, i) => {
@@ -3469,7 +3937,7 @@
         if (now < c.nextFid) continue;
         c.nextFid = now + rand(4.5, 11);
         if (c.actions.length || st.inspecting || c.root.style.display === 'none' || (c === fuse && TB && (TB.prank >= 0 || fuseOnRim()))) continue;
-        const m = pick(FIDGETS)(Math.random() < 0.5 ? -1 : 1);
+        const m = c === sparky ? pick(SPK_FIDGETS)() : pick(FIDGETS)(Math.random() < 0.5 ? -1 : 1);
         c.play(m.k, m.d, { slot: 'small' });
       }
       /* the outlet's probe points ride along with him */
@@ -3484,7 +3952,7 @@
       }
       /* Level 2: idle with the breaker off and the travelers in? He has a plan
          (checked at most once a second, done at most once a visit) */
-      if (ID === 2 && A.settings.scares && !st.swapDone && PH.st === 'hid' && ph.root.style.display === 'none' && now - lastInput > 14 && now > (st.swapCheck || 0)
+      if (LEVEL.swap && A.settings.scares && !st.swapDone && PH.st === 'hid' && ph.root.style.display === 'none' && now - lastInput > 14 && now > (st.swapCheck || 0)
         && !st.power && !st.trip && !busy() && !lead && !job && !st.blown && !st.faultLock) {
         st.swapCheck = now + 1;
         if (swapPlan()) { lastInput = now; phantomTravelerSwap(); }
@@ -3514,26 +3982,27 @@
   }
 
   /* test hooks: window.CircuitLevel (1.3 Flip the Switch), CircuitLevel2 (1.7
-     Stairway Lights), CircuitLevel11 (1.1 Toolbox), CircuitLevel12 (1.2 Pull Chain) */
+     Stairway Lights), CircuitLevel11 (1.1 Toolbox), CircuitLevel12 (1.2 Pull
+     Chain), CircuitLevel14 (1.4 Switch Loop) */
   window.CircuitLevel11 = buildLevel(LEVEL11);
   window.CircuitLevel12 = buildLevel(LEVEL12);
   window.CircuitLevel = buildLevel(LEVEL1);
+  window.CircuitLevel14 = buildLevel(LEVEL14);
+  window.CircuitLevel15 = buildLevel(LEVEL15);
+  window.CircuitLevel16 = buildLevel(LEVEL16);
   window.CircuitLevel2 = buildLevel(LEVEL2);
-  /* Unlocks. Nothing a player has already reached is ever taken away: Flip the
-     Switch (the old first job) is always open, and each job opens once the one
-     before it is approved (or anything after it already has been). */
+  /* Unlocks. Nothing a player has already reached is ever taken away: 1.1 and
+     Flip the Switch (the old first job) are always open, and each job opens
+     once the one before it on the sign is approved (or anything after it
+     already has been). Stairway Lights also stays open to anyone who'd passed
+     Flip the Switch before the jobs between them were built. */
   const won = store => { try { return !!(JSON.parse(localStorage.getItem(store) || 'null') || {}).won; } catch (e) { return false; } };
-  const ORDER = [LEVEL11, LEVEL12, LEVEL1, LEVEL2];
-  const OPEN = {
-    lvl11: () => true,
-    lvl12: () => won(LEVEL11.store) || won(LEVEL12.store) || won(LEVEL1.store) || won(LEVEL2.store),
-    level: () => true,
-    level2: () => won(LEVEL1.store) || won(LEVEL2.store),
-  };
+  const ORDER = [LEVEL11, LEVEL12, LEVEL1, LEVEL14, LEVEL15, LEVEL16, LEVEL2];
+  const ALWAYS = new Set(['lvl11', 'level']);
+  const openAt = i => ALWAYS.has(ORDER[i].screen) || ORDER.some((L, j) => j >= i - 1 && won(L.store)) || (ORDER[i].screen === 'level2' && won(LEVEL1.store));
   window.CircuitLevels = {
     ORDER,
-    open: screen => !!(OPEN[screen] && OPEN[screen]()),
-    unlocked: n => (n === 2 ? OPEN.level2() : true),
+    open: screen => { const i = ORDER.findIndex(L => L.screen === screen); return i >= 0 && openAt(i); },
     /* the job sign lists Chapter 1 in order: a painted check for a job that's
        been approved, a padlock for one that isn't open yet */
     refresh() {

@@ -1,7 +1,7 @@
 /* Circuit Panic! — offline support. Precaches the whole game so it plays with no
    connection; fonts are cached the first time they load. Bump VERSION to roll
    out an update. */
-const VERSION = 'cp-v9';
+const VERSION = 'cp-v15';
 const CORE = [
   './', 'index.html', 'style.css', 'manifest.webmanifest',
   'js/toon.js', 'js/audio.js', 'js/fx.js', 'js/gfx.js', 'js/circuit.js', 'js/app.js', 'js/menu.js', 'js/level.js',
